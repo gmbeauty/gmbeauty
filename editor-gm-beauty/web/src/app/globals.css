@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+/* Identidade GM Beauty */
+@theme {
+  --color-gm-lilac: #b57edc;
+  --color-gm-lilac-soft: #f4ecfa;
+  --color-gm-lilac-mid: #e3d0f2;
+  --color-gm-purple: #4b1c71;
+  --color-gm-ink: #2a2330;
+  --color-gm-muted: #7a7283;
+  --color-gm-line: #ece6f1;
+  --color-gm-bg: #fbf9fd;
+  --radius-gm: 1rem;
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+}
+
+body {
+  background: #ffffff;
+  color: var(--color-gm-ink);
+  font-family: var(--font-sans);
+}
