@@ -61,8 +61,10 @@ def test_full_flow(client, landscape_video, tmp_path):
     # exportar: sem silêncios, 9:16, logo, palavra a palavra
     logo = tmp_path / "logo.png"
     subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "color=c=0xB57EDC:s=300x120", "-frames:v", "1", str(logo)], check=True)
+    assert client.get("/logo/status").json() == {"exists": False}
     with open(logo, "rb") as f:
         assert client.post("/logo", files={"file": ("logo.png", f, "image/png")}).status_code == 201
+    assert client.get("/logo/status").json() == {"exists": True}
     settings = {"captionMode": "word-by-word", "fontSize": "lg", "position": "bottom", "removeSilences": True,
                 "logoPosition": "top", "highlightStrategy": "offer"}
     assert client.patch(f"/projects/{pid}", json={"settings": settings}).status_code == 200

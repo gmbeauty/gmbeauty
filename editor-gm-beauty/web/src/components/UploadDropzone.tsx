@@ -4,11 +4,14 @@ import { useRef, useState } from "react";
 import { formatDuration, formatSize } from "@/lib/format";
 
 export interface VideoInfo {
+  file: File;
   name: string;
   sizeBytes: number;
-  durationSec: number;
-  width: number;
-  height: number;
+  // Podem faltar: alguns navegadores não leem certos formatos (ex.: HEVC de iPhone).
+  // O servidor lê o vídeo de qualquer forma, então isso não bloqueia o envio.
+  durationSec?: number;
+  width?: number;
+  height?: number;
 }
 
 const ACCEPTED = ["video/mp4", "video/quicktime"]; // MP4 e MOV
@@ -22,6 +25,7 @@ function readVideoInfo(file: File): Promise<VideoInfo> {
     video.preload = "metadata";
     video.onloadedmetadata = () => {
       resolve({
+        file,
         name: file.name,
         sizeBytes: file.size,
         durationSec: video.duration,
@@ -34,6 +38,7 @@ function readVideoInfo(file: File): Promise<VideoInfo> {
       URL.revokeObjectURL(url);
       reject(new Error("unreadable"));
     };
+    setTimeout(() => reject(new Error("timeout")), 8000);
     video.src = url;
   });
 }
@@ -60,7 +65,7 @@ export function UploadDropzone({
     try {
       onInfo(await readVideoInfo(file));
     } catch {
-      setError("Não conseguimos ler este vídeo. Tente outro arquivo.");
+      onInfo({ file, name: file.name, sizeBytes: file.size });
     }
   }
 
@@ -106,9 +111,9 @@ export function UploadDropzone({
       {info && (
         <dl className="mt-4 grid grid-cols-2 gap-4 rounded-gm border border-gm-line bg-white p-4 text-sm sm:grid-cols-4">
           <Info label="Nome" value={info.name} />
-          <Info label="Duração" value={formatDuration(info.durationSec)} />
+          <Info label="Duração" value={info.durationSec ? formatDuration(info.durationSec) : "—"} />
           <Info label="Tamanho" value={formatSize(info.sizeBytes)} />
-          <Info label="Resolução" value={`${info.width}×${info.height}`} />
+          <Info label="Resolução" value={info.width ? `${info.width}×${info.height}` : "—"} />
         </dl>
       )}
     </div>

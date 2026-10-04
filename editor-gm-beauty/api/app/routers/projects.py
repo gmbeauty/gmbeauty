@@ -254,6 +254,11 @@ def set_highlights(project_id: str, body: HighlightsIn, db: Session = Depends(ge
 
 # ---------- logo (única, da GM Beauty) ----------
 
+@router.get("/logo/status")
+def logo_status():
+    return {"exists": storage.logo_path() is not None}
+
+
 @router.get("/logo")
 def get_logo():
     path = storage.logo_path()
