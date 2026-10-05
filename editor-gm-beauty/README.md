@@ -20,15 +20,41 @@ Fluxo: **upload → escolher tipo e estilo → edição automática → revisar 
 - **B-roll:** na Biblioteca você envia clipes seus (MP4/MOV) e escreve **como o produto é falado** em cada um (ex.: “base Ruby Rose, base da Ruby Rose”). O editor só sugere o clipe quando a fala cita esse nome: nunca nos primeiros 1,5 s, com 3 s de intervalo entre eles e no máximo 40% do vídeo coberto. O B-roll cobre a imagem e a sua fala continua. Você revisa a lista (troca o clipe, ajusta a duração, remove, adiciona) e a prévia mostra o resultado. GM Produto já vem com B-roll ligado.
 - **Análise do gancho** dos primeiros 3 s: checa início rápido, abertura que chama a pessoa, legenda curta e destaque; oferece cortar o silêncio inicial e destacar a palavra do gancho. É uma checagem por regras sobre a transcrição (não é IA).
 
-## O que você precisa instalar
+## Instalação no seu computador (passo a passo)
 
-1. **Node 20+** (https://nodejs.org)
-2. **Python 3.10+**
-3. **FFmpeg 4.4 ou mais novo** (com libx264): `brew install ffmpeg` (Mac) · `sudo apt install ffmpeg` (Linux) · `winget install ffmpeg` (Windows)
+**1. Instale 3 programas (uma única vez)**
 
-## Como executar
+| Programa | Mac | Windows |
+|---|---|---|
+| Node.js (LTS) | https://nodejs.org | https://nodejs.org |
+| Python 3 | https://www.python.org/downloads | https://www.python.org/downloads (marque **“Add python.exe to PATH”**) |
+| FFmpeg 4.4 ou mais novo | instale o Homebrew (https://brew.sh) e rode `brew install ffmpeg` | no Prompt de Comando: `winget install ffmpeg` |
 
-Abra dois terminais.
+**2. Baixe o editor**
+
+No GitHub (`gmbeauty/gmbeauty`), escolha o branch `claude/push-pending-commits-yvw5b6` (ou `main`, depois que o PR for aprovado), clique em **Code → Download ZIP** e extraia a pasta. A pasta que interessa é `editor-gm-beauty`.
+
+**3. Abra o editor com dois cliques**
+
+- **Mac:** dê dois cliques em `iniciar.command`. Se o Mac bloquear, clique com o botão direito → Abrir. Se disser que não tem permissão, abra o Terminal na pasta e rode `chmod +x iniciar.command`.
+- **Windows:** dê dois cliques em `iniciar.bat`. (Se aparecer um aviso do Windows, “Mais informações → Executar assim mesmo”.)
+
+Na primeira vez ele instala o que falta (alguns minutos, precisa de internet) e abre o navegador em **http://localhost:3000**. Nas próximas, abre em segundos. Para encerrar, feche a janela do terminal (no Windows, as duas janelas “Editor GM Beauty”).
+
+> O iniciador de Mac/Linux foi testado. O `iniciar.bat` (Windows) foi escrito com cuidado, mas **não foi testado** em um Windows de verdade; se algo falhar, use os comandos manuais abaixo ou me avise com a mensagem que apareceu.
+
+**4. Transcrição (escolha uma)**
+
+- **Gratuita (padrão):** nada a fazer. Na primeira transcrição o programa baixa o modelo Whisper (~500 MB), então a primeira vez demora.
+- **Mais rápida, com a API da OpenAI (paga por uso):** crie na pasta `editor-gm-beauty` um arquivo de texto chamado `chave-openai.txt` com a sua chave dentro (só a chave) e abra o iniciador de novo.
+
+**Seus vídeos ficam só no seu computador**, na pasta `api/storage` (não vai para o GitHub). Para fazer backup, copie essa pasta.
+
+**Atualizar para uma versão nova:** baixe o ZIP de novo, extraia e copie a sua pasta `api/storage` antiga para dentro da nova.
+
+## Comandos manuais (alternativa ao iniciador)
+
+Requisitos: os mesmos 3 programas acima. Abra dois terminais.
 
 **Terminal 1 — servidor (API)**
 ```bash
@@ -46,7 +72,7 @@ npm install
 npm run dev                      # abra http://localhost:3000
 ```
 
-### Transcrição (escolha uma)
+### Transcrição nos comandos manuais
 
 - **Local e gratuita (padrão sem chave):** nada a configurar. Na 1ª vez baixa o modelo Whisper (~500 MB para `small`) e transcreve no seu computador. Para mais precisão: `WHISPER_MODEL=medium`.
 - **API da OpenAI (mais rápida):** `export OPENAI_API_KEY=sua-chave` antes de iniciar o servidor.
