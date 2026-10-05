@@ -79,6 +79,10 @@ npm run dev                      # abra http://localhost:3000
 
 Variáveis opcionais do servidor: `CAPTION_FONT` (fonte das legendas no vídeo; precisa estar instalada, padrão `Arial`), `CAPTION_FONTS_DIR` (pasta com fontes extras), `DATA_DIR` (onde ficam os vídeos), `DATABASE_URL` (PostgreSQL/Supabase), `MAX_UPLOAD_MB`.
 
+## Se a transcrição falhar
+
+Dê dois cliques em **`diagnostico`** (na pasta do editor). Ele testa, passo a passo, o FFmpeg, o componente de transcrição, a internet e o download do modelo de voz, e mostra o que falhou. Tire um print da janela e envie para quem está ajudando. Causas comuns: internet instável ou bloqueando o download do modelo (tente outra rede, como o hotspot do celular, e desligue VPN/antivírus) e falta do “Microsoft Visual C++” (https://aka.ms/vs/17/release/vc_redist.x64.exe). Para um download menor, defina `WHISPER_MODEL=base`.
+
 ## Testes
 
 ```bash

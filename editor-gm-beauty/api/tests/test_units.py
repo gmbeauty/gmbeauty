@@ -193,3 +193,39 @@ def test_broll_respects_hook_coverage_and_clip_length():
     assert broll_svc.plan_broll(_bcaps(), [broll_svc.Clip("c1", "ainda aplica", 0.5)], 20) == []  # curto demais
     assert broll_svc.plan_broll(_bcaps(), clips, 4.0) == []  # sem espaço no vídeo
     assert broll_svc.plan_broll(_bcaps(), [], 20) == []
+
+
+# ---------- mensagens de erro da transcrição local ----------
+def test_local_transcription_errors_are_friendly(monkeypatch, tmp_path):
+    import sys
+    import types
+
+    from app.errors import ProcessingError
+    from app.services import transcribe as tr
+
+    class Boom(Exception):
+        pass
+
+    def fake_model(error):
+        mod = types.ModuleType("faster_whisper")
+
+        def WhisperModel(*a, **k):  # noqa: N802
+            raise error
+
+        mod.WhisperModel = WhisperModel
+        return mod
+
+    monkeypatch.setattr(tr, "_local_model", None)
+    monkeypatch.setitem(sys.modules, "faster_whisper", fake_model(ConnectionError("Connection aborted")))
+    try:
+        tr._local(tmp_path / "x.wav", [])
+        raise AssertionError("deveria falhar")
+    except ProcessingError as e:
+        assert "baixar o modelo" in e.user_message and "Connection aborted" in e.detail
+
+    monkeypatch.setitem(sys.modules, "faster_whisper", fake_model(Boom("algo estranho")))
+    try:
+        tr._local(tmp_path / "x.wav", [])
+        raise AssertionError("deveria falhar")
+    except ProcessingError as e:
+        assert "diagnostico" in e.user_message and "Traceback" not in e.user_message

@@ -76,9 +76,20 @@ def _local(audio: Path, terms: list[str]) -> list[Word]:
             for w in seg.words or []:
                 words.append({"w": w.word.strip(), "s": float(w.start), "e": float(w.end)})
         return words
-    except Exception as exc:  # noqa: BLE001
+    except ImportError as exc:
         raise ProcessingError(
-            "Não conseguimos transcrever o áudio. Tente novamente em instantes.", repr(exc)
+            "O componente de transcrição não iniciou neste computador. Abra o arquivo “diagnostico” para ver o motivo.", repr(exc)
+        )
+    except Exception as exc:  # noqa: BLE001
+        probe = (type(exc).__name__ + repr(exc)).lower()
+        if any(k in probe for k in ("connection", "timeout", "offline", "huggingface", "localentrynotfound", "ssl", "resolve", "http", "proxy", "forbidden", "403", "unreachable")):
+            raise ProcessingError(
+                "Não conseguimos baixar o modelo de transcrição. Verifique a internet (a primeira vez baixa ~500 MB) "
+                "e clique em Tentar novamente. Se continuar, abra o arquivo “diagnostico”.",
+                repr(exc),
+            )
+        raise ProcessingError(
+            "Não conseguimos transcrever o áudio. Tente novamente; se continuar, abra o arquivo “diagnostico”.", repr(exc)
         )
 
 

@@ -4,6 +4,10 @@ from pathlib import Path
 
 API_DIR = Path(__file__).resolve().parent.parent
 
+# Download do modelo de voz em conexões lentas ou instáveis: espera mais antes de desistir.
+os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", "120")
+os.environ.setdefault("HF_HUB_ETAG_TIMEOUT", "60")
+
 DATA_DIR = Path(os.getenv("DATA_DIR", API_DIR / "storage"))
 PROJECTS_DIR = DATA_DIR / "projects"
 LOGS_DIR = DATA_DIR / "logs"
