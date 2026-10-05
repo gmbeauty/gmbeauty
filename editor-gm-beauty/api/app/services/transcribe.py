@@ -61,6 +61,23 @@ def _openai(audio: Path, terms: list[str]) -> list[Word]:
 _local_model = None
 
 
+def load_audio_16k(path: Path):
+    """Lê o WAV mono 16 kHz que o próprio editor gera e devolve amostras float32 (-1..1).
+
+    Entregar as amostras direto ao modelo evita a biblioteca de decodificação (PyAV), cuja versão
+    instalada em alguns computadores é incompatível com o faster-whisper.
+    """
+    import wave
+
+    import numpy as np
+
+    with wave.open(str(path), "rb") as w:
+        if w.getframerate() != 16000 or w.getnchannels() != 1 or w.getsampwidth() != 2:
+            raise ValueError(f"formato de áudio inesperado: {w.getframerate()} Hz, {w.getnchannels()} canal(is)")
+        raw = w.readframes(w.getnframes())
+    return np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
+
+
 def _local(audio: Path, terms: list[str]) -> list[Word]:
     global _local_model
     try:
@@ -69,7 +86,7 @@ def _local(audio: Path, terms: list[str]) -> list[Word]:
         if _local_model is None:
             _local_model = WhisperModel(config.WHISPER_MODEL, device="auto", compute_type="int8")
         segments, _info = _local_model.transcribe(
-            str(audio), language="pt", word_timestamps=True, initial_prompt=_prompt(terms), beam_size=5
+            load_audio_16k(audio), language="pt", word_timestamps=True, initial_prompt=_prompt(terms), beam_size=5
         )
         words: list[Word] = []
         for seg in segments:

@@ -85,7 +85,9 @@ if whisper_ok:
                 [config.FFMPEG, "-y", "-v", "error", "-f", "lavfi", "-i", "anullsrc=r=16000:cl=mono", "-t", "2", str(wav)],
                 check=True,
             )
-            segs, _ = model.transcribe(str(wav), language="pt")
+            from app.services.transcribe import load_audio_16k
+
+            segs, _ = model.transcribe(load_audio_16k(wav), language="pt")  # mesmo caminho usado pelo editor
             list(segs)
         ok("transcrição de teste funcionou")
     except Exception as exc:  # noqa: BLE001

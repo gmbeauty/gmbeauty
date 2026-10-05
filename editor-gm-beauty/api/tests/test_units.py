@@ -229,3 +229,53 @@ def test_local_transcription_errors_are_friendly(monkeypatch, tmp_path):
         raise AssertionError("deveria falhar")
     except ProcessingError as e:
         assert "diagnostico" in e.user_message and "Traceback" not in e.user_message
+
+
+def test_local_transcription_gets_samples_not_a_file_path(monkeypatch, tmp_path):
+    """O modelo recebe amostras (numpy), não um caminho: assim não depende da versão do PyAV."""
+    import subprocess
+    import sys
+    import types
+
+    import numpy as np
+
+    from app.services import transcribe as tr
+
+    wav = tmp_path / "a.wav"
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "sine=f=440:sample_rate=16000:d=1", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(wav)],
+        check=True,
+    )
+    samples = tr.load_audio_16k(wav)
+    assert samples.dtype == np.float32 and samples.shape == (16000,) and 0.1 < float(np.abs(samples).max()) <= 0.15  # o seno do FFmpeg tem 1/8 do volume máximo
+
+    seen = {}
+
+    class FakeWord:
+        word, start, end = " olá", 0.1, 0.5
+
+    class FakeSeg:
+        words = [FakeWord()]
+
+    class FakeModel:
+        def __init__(self, *a, **k):
+            pass
+
+        def transcribe(self, audio, **kw):
+            seen["audio"] = audio
+            return [FakeSeg()], None
+
+    mod = types.ModuleType("faster_whisper")
+    mod.WhisperModel = FakeModel
+    monkeypatch.setitem(sys.modules, "faster_whisper", mod)
+    monkeypatch.setattr(tr, "_local_model", None)
+    words = tr._local(wav, ["Ruby Rose"])
+    assert isinstance(seen["audio"], np.ndarray) and words == [{"w": "olá", "s": 0.1, "e": 0.5}]
+
+    stereo = tmp_path / "b.wav"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "sine=d=1", "-ac", "2", str(stereo)], check=True)
+    try:
+        tr.load_audio_16k(stereo)
+        raise AssertionError("deveria recusar áudio fora do formato")
+    except ValueError:
+        pass
