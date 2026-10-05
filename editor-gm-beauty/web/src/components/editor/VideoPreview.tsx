@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { urls } from "@/lib/api";
+import { sfxAudioUrl, urls } from "@/lib/api";
 import { activeWordIndex, cleanWord, FONT_PX, GM_COLORS, MAX_CHARS, OUTLINE_FOR, wrapLines } from "@/lib/captions";
 import { allCuts } from "@/lib/cuts";
 import { formatDuration } from "@/lib/format";
 import { SAFE_ZONE } from "@/lib/safe-zone";
 import { zoomAt } from "@/lib/zoom";
-import type { CaptionSegment, Project, RenderSettings, ZoomEvent } from "@/lib/types";
+import type { CaptionSegment, Project, RenderSettings, SfxEvent, ZoomEvent } from "@/lib/types";
 
 export function VideoPreview({
   project,
@@ -15,6 +15,7 @@ export function VideoPreview({
   captions,
   showSafeZone,
   zoomPlan,
+  sfxEvents,
   logoUrl,
   videoRef,
   currentSec,
@@ -25,6 +26,7 @@ export function VideoPreview({
   captions: CaptionSegment[];
   showSafeZone: boolean;
   zoomPlan: ZoomEvent[];
+  sfxEvents: SfxEvent[];
   logoUrl: string | null;
   videoRef: React.RefObject<HTMLVideoElement | null>;
   currentSec: number;
@@ -36,6 +38,13 @@ export function VideoPreview({
     cutsRef.current = allCuts(project.silences, settings);
   }, [settings, project.silences]);
 
+  // Efeitos sonoros: tocam na prévia quando o vídeo passa pelo ponto marcado.
+  const sfxRef = useRef({ events: sfxEvents, enabled: settings.sfxEnabled, gainDb: settings.sfxGainDb });
+  useEffect(() => {
+    sfxRef.current = { events: sfxEvents, enabled: settings.sfxEnabled, gainDb: settings.sfxGainDb };
+  }, [sfxEvents, settings.sfxEnabled, settings.sfxGainDb]);
+  const lastT = useRef(0);
+
   // Acompanha o vídeo quadro a quadro e, se "remover silêncios" estiver ligado,
   // pula os trechos que serão cortados (prévia fiel ao resultado).
   useEffect(() => {
@@ -46,6 +55,17 @@ export function VideoPreview({
       if (v) {
         const cut = cutsRef.current.find(([a, b]) => v.currentTime >= a && v.currentTime < b);
         if (cut) v.currentTime = cut[1];
+        const { events, enabled, gainDb } = sfxRef.current;
+        if (enabled) {
+          for (const e of events) {
+            if (lastT.current < e.startSec && v.currentTime >= e.startSec && v.currentTime - lastT.current < 0.5) {
+              const a = new Audio(sfxAudioUrl(e.sfxId));
+              a.volume = Math.min(1, 10 ** (gainDb / 20));
+              a.play().catch(() => {});
+            }
+          }
+        }
+        lastT.current = v.currentTime;
         onTime(v.currentTime);
       }
       raf = requestAnimationFrame(tick);
@@ -76,7 +96,10 @@ export function VideoPreview({
           onClick={toggle}
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
-          onSeeked={(e) => onTime(e.currentTarget.currentTime)}
+          onSeeked={(e) => {
+            lastT.current = e.currentTarget.currentTime;
+            onTime(e.currentTarget.currentTime);
+          }}
           className="absolute inset-0 h-full w-full cursor-pointer object-contain"
           style={{ transform: `scale(${zoomAt(zoomPlan, currentSec)})` }}
         />

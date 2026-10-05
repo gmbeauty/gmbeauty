@@ -193,3 +193,93 @@ def _frame_diff(a, b, at):
         ).stdout
     fa, fb = frame(a), frame(b)
     return sum(abs(x - y) for x, y in zip(fa, fb)) / len(fa)
+
+
+def _make_beep(path):
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "sine=f=880:d=0.5", str(path)], check=True)
+
+
+def _mean_volume(path, start, dur):
+    out = subprocess.run(
+        ["ffmpeg", "-v", "info", "-ss", str(start), "-t", str(dur), "-i", str(path), "-vn", "-af", "volumedetect", "-f", "null", "-"],
+        capture_output=True, text=True,
+    ).stderr
+    for line in out.splitlines():
+        if "mean_volume" in line:
+            return float(line.split("mean_volume:")[1].split("dB")[0])
+    return -91.0
+
+
+def test_sound_library_and_sfx_mix(client, landscape_video, tmp_path):
+    beep = tmp_path / "pop.wav"
+    _make_beep(beep)
+    # biblioteca: upload, tipos, validações
+    with open(beep, "rb") as f:
+        r = client.post("/library/sfx", files={"file": ("pop.wav", f, "audio/wav")}, data={"name": "Pop", "category": "destaque"})
+    assert r.status_code == 201, r.text
+    snd = r.json()
+    assert snd["category"] == "destaque" and 0.4 < snd["durationSec"] < 0.7
+    assert client.get(f"/library/sfx/{snd['id']}/audio").status_code == 200
+    bad = tmp_path / "falso.mp3"
+    bad.write_text("não é áudio")
+    r = client.post("/library/sfx", files={"file": ("falso.mp3", open(bad, "rb"), "audio/mpeg")}, data={"category": "outro"})
+    assert r.status_code == 400 and "ffmpeg" not in r.json()["detail"].lower()
+    assert client.post("/library/sfx", files={"file": ("a.txt", b"x", "text/plain")}, data={"category": "outro"}).status_code == 400
+
+    pid = upload(client, landscape_video).json()["id"]
+    client.post(f"/projects/{pid}/analyze")
+    wait(client, pid)
+
+    # sugestão: destaque na palavra marcada
+    client.post(f"/projects/{pid}/highlights", json={"strategy": "keywords"})
+    client.patch(f"/projects/{pid}", json={"settings": {"captionMode": "highlight", "highlightStrategy": "keywords"}})
+    sug = client.post(f"/projects/{pid}/sfx/suggest").json()
+    assert sug["sfxEvents"] and all(e["sfxId"] == snd["id"] for e in sug["sfxEvents"])
+
+    # evento manual no meio do silêncio (3,0 s) e exporta sem/ com efeitos
+    ev = [{"id": "m1", "startSec": 3.0, "sfxId": snd["id"]}]
+    assert client.put(f"/projects/{pid}/sfx", json={"events": ev}).json()["sfxEvents"][0]["startSec"] == 3.0
+    assert client.put(f"/projects/{pid}/sfx", json={"events": ev + [{"id": "x", "startSec": 1, "sfxId": "naoexiste"}]}).json()["sfxEvents"] == ev
+
+    outs = {}
+    for name, enabled in (("sem", False), ("com", True)):
+        client.patch(f"/projects/{pid}", json={"settings": {"sfxEnabled": enabled, "sfxGainDb": -10}})
+        client.post(f"/projects/{pid}/export")
+        p = wait(client, pid)
+        assert p["status"] == "ready", p["errorMessage"]
+        outs[name] = tmp_path / f"{name}.mp4"
+        outs[name].write_bytes(client.get(f"/projects/{pid}/download").content)
+    assert _mean_volume(outs["sem"], 3.0, 0.4) < -60  # o trecho é silêncio na fala
+    assert _mean_volume(outs["com"], 3.0, 0.4) > -35  # o efeito está lá
+    assert abs(float(ffprobe(outs["com"])["format"]["duration"]) - float(ffprobe(outs["sem"])["format"]["duration"])) < 0.2
+
+    # apagar o som da biblioteca o remove dos projetos
+    assert client.delete(f"/library/sfx/{snd['id']}").status_code == 204
+    assert client.get(f"/projects/{pid}").json()["sfxEvents"] == []
+    assert client.get("/library/sfx").json() == []
+    client.delete(f"/projects/{pid}")
+
+
+def test_old_database_gets_new_columns(tmp_path):
+    """Um banco criado antes da Fase 12 (sem sfx_events) é atualizado sozinho."""
+    import sqlite3
+
+    from sqlalchemy import create_engine, inspect
+
+    import app.db as dbmod
+
+    path = tmp_path / "old.db"
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE projects (id VARCHAR PRIMARY KEY, name VARCHAR)")
+    con.execute("INSERT INTO projects VALUES ('a1', 'antigo')")
+    con.commit(); con.close()
+
+    old = dbmod.engine
+    dbmod.engine = create_engine(f"sqlite:///{path}")
+    try:
+        dbmod.Base.metadata.create_all(dbmod.engine)  # igual ao init_db: cria tabelas novas...
+        dbmod._add_missing_columns()  # ...e acrescenta colunas novas nas antigas
+        cols = {c["name"] for c in inspect(dbmod.engine).get_columns("projects")}
+    finally:
+        dbmod.engine = old
+    assert {"sfx_events", "settings", "captions"} <= cols

@@ -4,7 +4,7 @@ Transforme vídeos brutos em conteúdo pronto para postar.
 
 Fluxo: **upload → escolher tipo e estilo → edição automática → revisar → exportar** (MP4 H.264, 1080×1920, 9:16).
 
-## O que já funciona (Fases 1–10)
+## O que já funciona (Fases 1–10 e 12)
 
 - Dashboard com projetos (miniatura, status, duplicar, excluir permanente).
 - Upload de MP4/MOV com barra de progresso.
@@ -16,13 +16,14 @@ Fluxo: **upload → escolher tipo e estilo → edição automática → revisar 
 - Logo opcional (posição, tamanho e transparência).
 - Exportação 9:16 e download.
 - **Zoom automático** (Desligado / Sutil / Dinâmico): aproximações suaves e espaçadas, até 5% (sutil) ou 9% (dinâmico), sem mexer em logo e legendas. GM Produto vem com zoom desligado para o produto ficar inteiro e parado.
+- **Efeitos sonoros + Biblioteca GM:** você envia seus próprios sons (Transição, Destaque, Oferta) em “Biblioteca”. O editor sugere onde colocar (início de zoom, palavra destacada, preço), com no mínimo 1,5 s entre efeitos e no máximo um a cada ~6 s. Você revisa a lista (remove, troca o som, adiciona manualmente), ajusta o volume (padrão −14 dB) e exporta. A prévia toca os efeitos. Confira a licença de cada som que enviar.
 - **Análise do gancho** dos primeiros 3 s: checa início rápido, abertura que chama a pessoa, legenda curta e destaque; oferece cortar o silêncio inicial e destacar a palavra do gancho. É uma checagem por regras sobre a transcrição (não é IA).
 
 ## O que você precisa instalar
 
 1. **Node 20+** (https://nodejs.org)
 2. **Python 3.10+**
-3. **FFmpeg** (com libx264): `brew install ffmpeg` (Mac) · `sudo apt install ffmpeg` (Linux) · `winget install ffmpeg` (Windows)
+3. **FFmpeg 4.4 ou mais novo** (com libx264): `brew install ffmpeg` (Mac) · `sudo apt install ffmpeg` (Linux) · `winget install ffmpeg` (Windows)
 
 ## Como executar
 
@@ -66,6 +67,6 @@ cd web && npm run lint && npm run build
 - Valores da zona segura são aproximados; ajuste em `web/src/lib/safe-zone.ts` e `api/app/services/ass.py` (mantenha os dois iguais).
 - Fonte das legendas é definida no servidor; ainda não há escolha de fonte na tela.
 
-Ainda não feitas: B-roll, efeitos sonoros, música automática e IA analisando roteiro e retenção (Fases 11–14), que dependem de decisões de produto.
+Ainda não feitas: B-roll (Fase 11) e IA analisando roteiro e retenção (Fase 14). Música automática (Fase 13) está fora do plano: contas comerciais têm restrição de música; o mais seguro é escolher a faixa dentro do Instagram/TikTok ao postar.
 
 Veja `ARCHITECTURE.md` para as decisões técnicas.

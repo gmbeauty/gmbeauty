@@ -44,3 +44,13 @@ def logo_path() -> Path | None:
 def delete_logo() -> None:
     for p in config.DATA_DIR.glob("logo.*"):
         p.unlink(missing_ok=True)
+
+
+def sfx_dir() -> Path:
+    d = config.DATA_DIR / "library" / "sfx"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def sfx_file(sound_id: str, ext: str) -> Path:
+    return sfx_dir() / f"{sound_id}{ext}"

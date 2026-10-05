@@ -31,9 +31,32 @@ class RenderSettings(CamelModel):
     silence_min_sec: float = Field(0.6, ge=0.3, le=3.0)
     trim_start_sec: float = Field(0.0, ge=0.0, le=10.0)  # corta o silêncio antes da 1ª fala
     zoom_mode: ZoomMode = "off"
+    sfx_enabled: bool = False
+    sfx_gain_db: float = Field(-14.0, ge=-30.0, le=-4.0)  # volume do efeito sobre a fala
     logo_position: LogoPosition = "none"
     logo_size_pct: int = Field(22, ge=8, le=50)
     logo_opacity: float = Field(0.9, ge=0.1, le=1.0)
+
+
+SfxCategory = Literal["transicao", "destaque", "oferta", "outro"]
+
+
+class SfxEvent(CamelModel):
+    id: str
+    start_sec: float = Field(ge=0)  # no tempo do vídeo ORIGINAL
+    sfx_id: str
+
+
+class SfxSoundOut(CamelModel):
+    id: str
+    name: str
+    category: SfxCategory
+    duration_sec: float
+    created_at: datetime
+
+
+class SfxEventsIn(CamelModel):
+    events: list[SfxEvent]
 
 
 class Word(CamelModel):
@@ -73,6 +96,7 @@ class ProjectOut(CamelModel):
     settings: RenderSettings
     captions: list[Caption]
     silences: list[Silence]
+    sfx_events: list[SfxEvent]
     analyzed: bool
     has_output: bool
     error_message: str | None

@@ -1,12 +1,13 @@
 import { allCuts } from "@/lib/cuts";
 import { formatDuration } from "@/lib/format";
-import type { CaptionSegment, RenderSettings, SilenceRange, ZoomEvent } from "@/lib/types";
+import type { CaptionSegment, RenderSettings, SfxEvent, SilenceRange, ZoomEvent } from "@/lib/types";
 
 export function Timeline({
   durationSec,
   captions,
   silences,
   zoomPlan,
+  sfxEvents,
   settings,
   selectedId,
   currentSec,
@@ -17,6 +18,7 @@ export function Timeline({
   captions: CaptionSegment[];
   silences: SilenceRange[];
   zoomPlan: ZoomEvent[];
+  sfxEvents: SfxEvent[];
   settings: RenderSettings;
   selectedId: string | null;
   currentSec: number;
@@ -35,13 +37,14 @@ export function Timeline({
           <span>{formatDuration(durationSec)}</span>
         </div>
         <div className="flex gap-2">
-          <div className="grid w-22 shrink-0 grid-rows-4 gap-2 text-xs text-gm-muted">
+          <div className="grid w-22 shrink-0 grid-rows-5 gap-2 text-xs text-gm-muted">
             <span className="flex items-center">🎬 Vídeo</span>
             <span className="flex items-center">💬 Legendas</span>
             <span className="flex items-center">✂️ Cortes</span>
             <span className="flex items-center">🔍 Zoom</span>
+            <span className="flex items-center">🔊 Sons</span>
           </div>
-          <div className="relative grid flex-1 grid-rows-4 gap-2">
+          <div className="relative grid flex-1 grid-rows-5 gap-2">
             {/* Vídeo: clique para ir a um ponto */}
             <button
               type="button"
@@ -89,6 +92,18 @@ export function Timeline({
                   title={`${z.kind === "settle" ? "Abertura" : "Zoom"} +${Math.round(z.amp * 100)}%`}
                   className="absolute inset-y-2 rounded-md bg-gm-lilac-mid ring-1 ring-gm-lilac"
                   style={{ left: pct(z.startSec), width: w(z.startSec, z.endSec) }}
+                />
+              ))}
+            </div>
+
+            {/* Sons: um traço por efeito sonoro */}
+            <div className="relative h-10 rounded-md bg-gm-bg">
+              {sfxEvents.map((e) => (
+                <div
+                  key={e.id}
+                  title="Efeito sonoro"
+                  className={`absolute inset-y-2 w-1.5 rounded-full ${settings.sfxEnabled ? "bg-gm-purple" : "bg-gm-lilac-mid"}`}
+                  style={{ left: pct(e.startSec) }}
                 />
               ))}
             </div>

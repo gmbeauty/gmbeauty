@@ -16,7 +16,7 @@ export const STYLE_PRESETS: StylePreset[] = [
     description: "Elegante, poucos efeitos, só pausas longas cortadas. Ideal para skincare e lançamentos.",
     settings: {
       captionMode: "traditional", fontSize: "md", position: "bottom", textColor: "white",
-      highlightColor: "lilac", highlightStrategy: "none", removeSilences: true, silenceMinSec: 0.8, zoomMode: "subtle",
+      highlightColor: "lilac", highlightStrategy: "none", removeSilences: true, silenceMinSec: 0.8, zoomMode: "subtle", sfxEnabled: false,
     },
   },
   {
@@ -25,7 +25,7 @@ export const STYLE_PRESETS: StylePreset[] = [
     description: "Dinâmico: palavra a palavra, destaque nas palavras fortes e ritmo mais rápido.",
     settings: {
       captionMode: "word-by-word", fontSize: "lg", position: "bottom", textColor: "white",
-      highlightColor: "lilac", highlightStrategy: "keywords", removeSilences: true, silenceMinSec: 0.5, zoomMode: "dynamic",
+      highlightColor: "lilac", highlightStrategy: "keywords", removeSilences: true, silenceMinSec: 0.5, zoomMode: "dynamic", sfxEnabled: true,
     },
   },
   {
@@ -34,7 +34,7 @@ export const STYLE_PRESETS: StylePreset[] = [
     description: "O produto é o protagonista: legenda menor, na base da zona segura, com destaque nos termos-chave.",
     settings: {
       captionMode: "highlight", fontSize: "sm", position: "bottom", textColor: "white",
-      highlightColor: "lilac", highlightStrategy: "keywords", removeSilences: true, silenceMinSec: 0.8, zoomMode: "off", // produto sempre inteiro e parado
+      highlightColor: "lilac", highlightStrategy: "keywords", removeSilences: true, silenceMinSec: 0.8, zoomMode: "off", sfxEnabled: false, // produto sempre inteiro e parado
     },
   },
   {
@@ -43,14 +43,14 @@ export const STYLE_PRESETS: StylePreset[] = [
     description: "Destaca preço, desconto, promoção e urgência que aparecerem na fala.",
     settings: {
       captionMode: "highlight", fontSize: "lg", position: "bottom", textColor: "white",
-      highlightColor: "lilac", highlightStrategy: "offer", removeSilences: true, silenceMinSec: 0.6, zoomMode: "subtle",
+      highlightColor: "lilac", highlightStrategy: "offer", removeSilences: true, silenceMinSec: 0.6, zoomMode: "subtle", sfxEnabled: true,
     },
   },
 ];
 
 export const DEFAULT_SETTINGS: RenderSettings = {
   captionMode: "traditional", fontSize: "md", position: "bottom", textColor: "white",
-  highlightColor: "lilac", highlightStrategy: "none", removeSilences: false, silenceMinSec: 0.6, trimStartSec: 0, zoomMode: "off",
+  highlightColor: "lilac", highlightStrategy: "none", removeSilences: false, silenceMinSec: 0.6, trimStartSec: 0, zoomMode: "off", sfxEnabled: false, sfxGainDb: -14,
   logoPosition: "none", logoSizePct: 22, logoOpacity: 0.9,
 };
 

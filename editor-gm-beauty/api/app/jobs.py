@@ -6,10 +6,11 @@ precisar de algo maior, só este arquivo muda.
 from __future__ import annotations
 
 import traceback
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
 from . import storage
-from .db import DictionaryTerm, Project, SessionLocal
+from .db import DictionaryTerm, Project, SessionLocal, SfxSound
 from .errors import GENERIC_MESSAGE, ProcessingError, logger
 from .schemas import Caption, RenderSettings
 from .services import captions as captions_svc
@@ -100,10 +101,21 @@ def export(db, project_id: str) -> None:
         silences=[(s["startSec"], s["endSec"]) for s in p.silences],
         settings=settings,
         logo=storage.logo_path(),
+        sfx=_sfx_files(db, p),
         on_progress=on_progress,
     )
     tmp.replace(out)
     _set(db, p, status="ready", stage=None, progress=100, has_output=True)
+
+
+def _sfx_files(db, p: Project) -> list[tuple[float, Path]]:
+    """Efeitos do projeto que ainda existem na Biblioteca GM."""
+    out = []
+    for ev in p.sfx_events or []:
+        snd = db.get(SfxSound, ev["sfxId"])
+        if snd and storage.sfx_file(snd.id, snd.ext).exists():
+            out.append((float(ev["startSec"]), storage.sfx_file(snd.id, snd.ext)))
+    return sorted(out)
 
 
 def recover_interrupted() -> None:

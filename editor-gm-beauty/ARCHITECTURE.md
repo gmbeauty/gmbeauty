@@ -38,6 +38,7 @@ editor-gm-beauty/
 SQLite local por padrão (`DATABASE_URL` troca para PostgreSQL/Supabase sem mudar o código).
 
 - `projects`: id, **owner_id** (hoje sempre "local"), nome, status (draft/processing/ready/error), etapa e progresso, tipo de conteúdo, estilo, dados do vídeo, `settings` (JSON), `captions` (JSON), `silences` (JSON), mensagem de erro para a pessoa e **detalhe técnico separado**.
+- `sfx_sounds`: Biblioteca GM (efeitos sonoros enviados por você; categoria e duração).
 - `dictionary_terms`: Dicionário GM Beauty (marcas e produtos). Já é enviado ao Whisper como dica de vocabulário; falta só a tela de cadastro.
 - Legendas e silêncios ficam em JSON dentro do projeto (sempre lidos/gravados juntos); se um dia precisarmos consultar por palavra, viram tabelas próprias.
 
@@ -74,9 +75,12 @@ Frontend: Next.js, React, TypeScript, Tailwind CSS. Backend: FastAPI, SQLAlchemy
 - **Fase 9 (zoom):** `services/zoom.py` planeja os zooms sobre as legendas (intervalo mínimo de 6 s no sutil e 3,5 s no dinâmico, movimento suave, só no centro). `GET /projects/<id>/insights` entrega o plano; a prévia aplica a mesma curva (`web/src/lib/zoom.ts`) e o `render.py` converte o plano em uma expressão do FFmpeg (`scale` com `eval=frame` + `crop`), depois do enquadramento e antes de logo/legenda. O plano é remapeado quando há cortes.
 - **Fase 10 (gancho):** `services/hook.py` faz 4 checagens simples nos primeiros 3 s (início rápido, abertura que chama a pessoa, 1ª legenda curta, destaque). "Cortar início" vira o ajuste `trimStartSec`, aplicado como um corte a mais no mesmo mecanismo dos silêncios.
 
-## Para as Fases 11–14
+- **Fase 12 (efeitos sonoros):** tabela `sfx_sounds` + arquivos em `storage/library/sfx/` (rotas `/library/sfx`). `services/sfx.py` sugere eventos por regras (transição no início do zoom, destaque na palavra marcada, oferta no preço; prioridade oferta > destaque > transição; intervalo mínimo de 1,5 s; ~1 a cada 6 s). Os eventos ficam em `projects.sfx_events` (JSON, editável pela pessoa). No `render.py` cada efeito vira uma entrada de áudio com `adelay` (instante já remapeado pelos cortes) e `volume`, mixada à fala com `amix=normalize=0` (por isso FFmpeg 4.4+).
+- **Migração do banco:** `db._add_missing_columns()` acrescenta colunas novas em bancos criados em fases anteriores (ex.: `sfx_events`), sem apagar nada.
 
-O render é um grafo de filtros em etapas (`render.py`); B-roll entra como mais uma etapa de vídeo e efeitos sonoros/música como uma etapa de mistura de áudio. Cada uma exige decisões suas antes (origem e licença dos arquivos de som, música e B-roll; uso de IA paga na Fase 14). Remotion continua adiado.
+## Para as próximas fases
+
+O render é um grafo de filtros em etapas (`render.py`); B-roll (Fase 11) entra como mais uma etapa de vídeo, usando a mesma Biblioteca GM (nova seção em `/biblioteca`, com etiqueta por produto). Música (Fase 13) fica fora do plano por causa de restrições de música em contas comerciais. IA (Fase 14) exigiria uma chave de API paga e leria só a transcrição. Remotion continua adiado.
 
 ## Antes de colocar online
 

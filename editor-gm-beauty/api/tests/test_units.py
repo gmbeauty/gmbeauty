@@ -130,3 +130,37 @@ def test_hook_strong_opening():
     h = analyze_hook(caps, RenderSettings())
     assert h["level"] == "strong" and all(c["ok"] for c in h["checks"])
     assert analyze_hook([], RenderSettings()) is None
+
+
+# ---------- Fase 12: efeitos sonoros ----------
+from app.services import sfx as sfx_svc  # noqa: E402
+
+SOUNDS = [sfx_svc.Sound("w1", "transicao"), sfx_svc.Sound("p1", "destaque"), sfx_svc.Sound("d1", "oferta")]
+
+
+def test_sfx_empty_library_gives_no_events():
+    assert sfx_svc.plan_sfx(_caps([(0, 2, "a b")]), [], RenderSettings(), [], 10) == []
+
+
+def test_sfx_plan_is_sparse_and_prioritizes_offer():
+    caps = _caps([(0.2 + i * 2.2, 2.0 + i * 2.2, "so R$ 29,90 hoje") for i in range(14)])
+    for c in caps:
+        c.highlight_words = ["2990"]
+    s = RenderSettings(caption_mode="highlight", highlight_strategy="offer", zoom_mode="subtle")
+    plan = zoom_svc.plan_zoom(caps, 32, "subtle")
+    ev = sfx_svc.plan_sfx(caps, plan, s, SOUNDS, 32)
+    assert ev and len(ev) <= 32 / 6 + 1  # nunca exagera
+    assert all(b["startSec"] - a["startSec"] >= sfx_svc.MIN_GAP_SEC - 1e-6 for a, b in zip(ev, ev[1:]))
+    assert {e["sfxId"] for e in ev} == {"d1"}  # preço vence transição/destaque nos mesmos pontos
+
+
+def test_sfx_uses_only_categories_present_and_respects_caption_mode():
+    caps = _caps([(1.0, 3.0, "olha essa base")])
+    caps[0].highlight_words = ["base"]
+    only_transition = [sfx_svc.Sound("w1", "transicao")]
+    plan = [zoom_svc.ZoomEvent(1.0, 3.0, 0.05, "in")]
+    ev = sfx_svc.plan_sfx(caps, plan, RenderSettings(caption_mode="highlight"), only_transition, 10)
+    assert [e["sfxId"] for e in ev] == ["w1"]
+    # legenda tradicional não mostra destaque, então não há som de destaque
+    ev = sfx_svc.plan_sfx(caps, [], RenderSettings(caption_mode="traditional"), SOUNDS, 10)
+    assert ev == []

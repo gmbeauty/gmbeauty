@@ -1,5 +1,5 @@
 // Único ponto de comunicação com o backend (FastAPI).
-import type { CaptionSegment, HighlightStrategy, Insights, Project, RenderSettings } from "./types";
+import type { CaptionSegment, HighlightStrategy, Insights, Project, RenderSettings, SfxCategory, SfxEvent, SfxSound } from "./types";
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -59,6 +59,20 @@ export const applyHighlightStrategy = (id: string, strategy: HighlightStrategy) 
 
 export const getInsights = (id: string) => request<Insights>(`/projects/${id}/insights`);
 export const highlightHook = (id: string) => request<Project>(`/projects/${id}/hook/highlight`, { method: "POST" });
+
+export const listSfx = () => request<SfxSound[]>("/library/sfx");
+export const deleteSfx = (id: string) => request<void>(`/library/sfx/${id}`, { method: "DELETE" });
+export const sfxAudioUrl = (id: string) => `${API_URL}/library/sfx/${id}/audio`;
+export const suggestSfx = (projectId: string) => request<Project>(`/projects/${projectId}/sfx/suggest`, { method: "POST" });
+export const saveSfx = (projectId: string, events: SfxEvent[]) => request<Project>(`/projects/${projectId}/sfx`, json("PUT", { events }));
+
+export async function uploadSfx(file: File, name: string, category: SfxCategory): Promise<SfxSound> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("name", name);
+  form.append("category", category);
+  return request<SfxSound>("/library/sfx", { method: "POST", body: form });
+}
 
 export async function hasLogo(): Promise<boolean> {
   try {

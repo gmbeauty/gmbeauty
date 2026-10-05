@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from .. import config, jobs, storage
-from ..db import DictionaryTerm, Project, _new_id, get_db
+from ..db import DictionaryTerm, Project, SfxSound, _new_id, get_db
 from ..errors import ProcessingError, logger
 from ..schemas import (
     Caption,
@@ -18,12 +18,13 @@ from ..schemas import (
     DictionaryIn,
     HighlightsIn,
     InsightsOut,
+    SfxEventsIn,
     ProjectOut,
     ProjectPatch,
     RenderSettings,
 )
 from ..services import captions as captions_svc
-from ..services import ffmpeg, hook, zoom
+from ..services import ffmpeg, hook, sfx, zoom
 
 router = APIRouter()
 ALLOWED_EXT = {".mp4", ".mov"}
@@ -40,6 +41,7 @@ def _get(db: Session, project_id: str) -> Project:
 def _out(p: Project) -> ProjectOut:
     data = {c.name: getattr(p, c.name) for c in Project.__table__.columns}
     data["settings"] = RenderSettings(**(p.settings or {}))
+    data["sfx_events"] = p.sfx_events or []
     return ProjectOut.model_validate(data)
 
 
@@ -151,6 +153,7 @@ def duplicate_project(project_id: str, db: Session = Depends(get_db)):
         settings=json.loads(json.dumps(src.settings)),
         captions=json.loads(json.dumps(src.captions)),
         silences=json.loads(json.dumps(src.silences)),
+        sfx_events=json.loads(json.dumps(src.sfx_events or [])),
         analyzed=src.analyzed,
     )
     shutil.copyfile(storage.original(src.id, src.ext), storage.original(copy.id, copy.ext))
@@ -279,6 +282,37 @@ def highlight_hook(project_id: str, db: Session = Depends(get_db)):
         raise HTTPException(400, "Ainda não há legendas para destacar.")
     first["highlightWords"] = hook.suggest_hook_highlight(first["text"])
     p.captions = caps
+    if p.status == "ready":
+        p.status = "draft"
+    db.commit()
+    return _out(p)
+
+
+# ---------- efeitos sonoros (Fase 12) ----------
+
+@router.post("/projects/{project_id}/sfx/suggest", response_model=ProjectOut, response_model_by_alias=True)
+def suggest_sfx(project_id: str, db: Session = Depends(get_db)):
+    """Propõe onde colocar os efeitos da Biblioteca GM (substitui a lista atual; a pessoa revisa)."""
+    p = _get(db, project_id)
+    settings = RenderSettings(**(p.settings or {}))
+    caps = [Caption(**c) for c in p.captions]
+    sounds = [sfx.Sound(s.id, s.category) for s in db.query(SfxSound).filter_by(owner_id="local")]
+    if not sounds:
+        raise HTTPException(400, "A Biblioteca GM ainda não tem efeitos sonoros. Envie alguns em “Biblioteca”.")
+    zplan = zoom.plan_zoom(caps, p.duration_sec, settings.zoom_mode)
+    p.sfx_events = sfx.plan_sfx(caps, zplan, settings, sounds, p.duration_sec)
+    if p.status == "ready":
+        p.status = "draft"
+    db.commit()
+    return _out(p)
+
+
+@router.put("/projects/{project_id}/sfx", response_model=ProjectOut, response_model_by_alias=True)
+def put_sfx(project_id: str, body: SfxEventsIn, db: Session = Depends(get_db)):
+    p = _get(db, project_id)
+    known = {s.id for s in db.query(SfxSound).filter_by(owner_id="local")}
+    events = [e.model_dump(by_alias=True) for e in body.events if e.sfx_id in known and e.start_sec <= p.duration_sec]
+    p.sfx_events = sorted(events, key=lambda e: e["startSec"])
     if p.status == "ready":
         p.status = "draft"
     db.commit()

@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, Integer, String, Text, create_engine
+from sqlalchemy import JSON, Boolean, DateTime, Float, Integer, String, Text, create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 from . import config
@@ -45,6 +45,7 @@ class Project(Base):
     settings: Mapped[dict] = mapped_column(JSON, default=dict)
     captions: Mapped[list] = mapped_column(JSON, default=list)
     silences: Mapped[list] = mapped_column(JSON, default=list)
+    sfx_events: Mapped[list | None] = mapped_column(JSON, default=list)  # efeitos sonoros posicionados
     analyzed: Mapped[bool] = mapped_column(Boolean, default=False)
     has_output: Mapped[bool] = mapped_column(Boolean, default=False)
 
@@ -53,6 +54,20 @@ class Project(Base):
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
+
+
+class SfxSound(Base):
+    """Efeito sonoro da Biblioteca GM (arquivo enviado por você)."""
+
+    __tablename__ = "sfx_sounds"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_new_id)
+    owner_id: Mapped[str] = mapped_column(String, default="local", index=True)
+    name: Mapped[str] = mapped_column(String)
+    category: Mapped[str] = mapped_column(String, default="outro")  # transicao|destaque|oferta|outro
+    ext: Mapped[str] = mapped_column(String, default=".mp3")
+    duration_sec: Mapped[float] = mapped_column(Float, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
 class DictionaryTerm(Base):
@@ -72,8 +87,21 @@ engine = create_engine(config.DATABASE_URL, connect_args=_connect_args)
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 
+def _add_missing_columns() -> None:
+    """Migração simples: bancos criados em fases anteriores ganham as colunas novas."""
+    insp = inspect(engine)
+    for table in Base.metadata.sorted_tables:
+        existing = {c["name"] for c in insp.get_columns(table.name)}
+        for col in table.columns:
+            if col.name not in existing:
+                ddl = col.type.compile(engine.dialect)
+                with engine.begin() as conn:
+                    conn.execute(text(f"ALTER TABLE {table.name} ADD COLUMN {col.name} {ddl}"))
+
+
 def init_db() -> None:
     Base.metadata.create_all(engine)
+    _add_missing_columns()
 
 
 def get_db():

@@ -7,12 +7,13 @@ import { SidePanel } from "./SidePanel";
 import { Timeline } from "./Timeline";
 import { VideoPreview } from "./VideoPreview";
 import { HookCard } from "./HookCard";
+import { SfxCard } from "./SfxCard";
 import {
   analyzeProject, applyHighlightStrategy, exportProject, getInsights, getProject, hasLogo as fetchHasLogo,
-  highlightHook, patchProject, removeLogo, saveCaptions, uploadLogo, urls,
+  highlightHook, listSfx, patchProject, saveSfx, sfxAudioUrl, suggestSfx, removeLogo, saveCaptions, uploadLogo, urls,
 } from "@/lib/api";
 import { settingsForPreset } from "@/lib/presets";
-import type { CaptionSegment, ContentTypeId, Insights, Project, RenderSettings, StylePresetId } from "@/lib/types";
+import type { CaptionSegment, ContentTypeId, Insights, Project, RenderSettings, SfxEvent, SfxSound, StylePresetId } from "@/lib/types";
 
 const STEPS: { stage: string; label: string }[] = [
   { stage: "audio", label: "Extraindo o áudio" },
@@ -28,6 +29,8 @@ export function EditorWorkspace({ id }: { id: string }) {
   const [settings, setSettings] = useState<RenderSettings | null>(null);
   const [captions, setCaptions] = useState<CaptionSegment[]>([]);
   const [insights, setInsights] = useState<Insights>({ zoomPlan: [], hook: null });
+  const [sfxEvents, setSfxEvents] = useState<SfxEvent[]>([]);
+  const [sfxSounds, setSfxSounds] = useState<SfxSound[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [currentSec, setCurrentSec] = useState(0);
   const [showSafeZone, setShowSafeZone] = useState(true);
@@ -61,9 +64,11 @@ export function EditorWorkspace({ id }: { id: string }) {
     let cancelled = false;
     (async () => {
       try {
-        const [p, logo] = await Promise.all([getProject(id), fetchHasLogo()]);
+        const [p, logo, sounds] = await Promise.all([getProject(id), fetchHasLogo(), listSfx().catch(() => [] as SfxSound[])]);
         if (cancelled) return;
         setProject(p);
+        setSfxEvents(p.sfxEvents);
+        setSfxSounds(sounds);
         setSettings(p.settings);
         setCaptions(p.captions);
         setSelectedId(p.captions[0]?.id ?? null);
@@ -151,6 +156,35 @@ export function EditorWorkspace({ id }: { id: string }) {
       setError(msg(e));
     }
   }
+
+  async function persistSfx(next: SfxEvent[]) {
+    setSfxEvents(next.slice().sort((a, b) => a.startSec - b.startSec));
+    try {
+      const p = await saveSfx(id, next);
+      setSfxEvents(p.sfxEvents);
+    } catch (e) {
+      setError(msg(e));
+    }
+  }
+
+  async function doSuggestSfx() {
+    setError(null);
+    try {
+      const p = await suggestSfx(id);
+      setSfxEvents(p.sfxEvents);
+      if (!settings?.sfxEnabled) changeSettings({ sfxEnabled: true });
+    } catch (e) {
+      setError(msg(e));
+    }
+  }
+
+  const addSfx = (sfxId: string) =>
+    persistSfx([...sfxEvents, { id: Math.random().toString(36).slice(2, 10), startSec: Math.round(currentSec * 100) / 100, sfxId }]);
+  const previewSfx = (sfxId: string) => {
+    const a = new Audio(sfxAudioUrl(sfxId));
+    a.volume = Math.min(1, 10 ** ((settings?.sfxGainDb ?? -14) / 20));
+    a.play().catch(() => {});
+  };
 
   async function doHighlightHook() {
     try {
@@ -275,7 +309,7 @@ export function EditorWorkspace({ id }: { id: string }) {
   const preview = (
     <VideoPreview
       project={project} settings={settings} captions={captions} showSafeZone={showSafeZone}
-      zoomPlan={insights.zoomPlan} logoUrl={logoUrl} videoRef={videoRef} currentSec={currentSec} onTime={setCurrentSec}
+      zoomPlan={insights.zoomPlan} sfxEvents={sfxEvents} logoUrl={logoUrl} videoRef={videoRef} currentSec={currentSec} onTime={setCurrentSec}
     />
   );
 
@@ -330,8 +364,15 @@ export function EditorWorkspace({ id }: { id: string }) {
           </div>
         </div>
         <Timeline
-          durationSec={project.durationSec} captions={captions} silences={project.silences} zoomPlan={insights.zoomPlan} settings={settings}
+          durationSec={project.durationSec} captions={captions} silences={project.silences} zoomPlan={insights.zoomPlan} sfxEvents={sfxEvents} settings={settings}
           selectedId={selectedId} currentSec={currentSec} onSelect={select} onSeek={seek}
+        />
+        <SfxCard
+          enabled={settings.sfxEnabled} gainDb={settings.sfxGainDb} events={sfxEvents} sounds={sfxSounds} currentSec={currentSec}
+          onToggle={(v) => changeSettings({ sfxEnabled: v })} onGain={(db) => changeSettings({ sfxGainDb: db })}
+          onSuggest={doSuggestSfx} onAdd={addSfx} onPreview={previewSfx}
+          onChangeSound={(evId, sfxId) => persistSfx(sfxEvents.map((e) => (e.id === evId ? { ...e, sfxId } : e)))}
+          onRemove={(evId) => persistSfx(sfxEvents.filter((e) => e.id !== evId))}
         />
         {insights.hook && (
           <HookCard hook={insights.hook} trimStartSec={settings.trimStartSec} onTrimStart={(sec) => changeSettings({ trimStartSec: sec })} onHighlightHook={doHighlightHook} />

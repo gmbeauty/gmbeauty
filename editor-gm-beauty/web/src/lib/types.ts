@@ -24,6 +24,8 @@ export interface RenderSettings {
   silenceMinSec: number;
   trimStartSec: number; // corta o silêncio antes da primeira fala
   zoomMode: ZoomMode;
+  sfxEnabled: boolean;
+  sfxGainDb: number; // volume do efeito sobre a fala (dB, negativo)
   logoPosition: LogoPosition;
   logoSizePct: number;
   logoOpacity: number;
@@ -66,6 +68,7 @@ export interface Project {
   settings: RenderSettings;
   captions: CaptionSegment[];
   silences: SilenceRange[];
+  sfxEvents: SfxEvent[];
   analyzed: boolean;
   hasOutput: boolean;
   errorMessage: string | null;
@@ -99,3 +102,26 @@ export interface Insights {
   zoomPlan: ZoomEvent[];
   hook: Hook | null;
 }
+
+export type SfxCategory = "transicao" | "destaque" | "oferta" | "outro";
+
+export interface SfxSound {
+  id: string;
+  name: string;
+  category: SfxCategory;
+  durationSec: number;
+  createdAt: string;
+}
+
+export interface SfxEvent {
+  id: string;
+  startSec: number; // no tempo do vídeo original
+  sfxId: string;
+}
+
+export const SFX_CATEGORIES: { id: SfxCategory; label: string; hint: string }[] = [
+  { id: "transicao", label: "Transição", hint: "entra junto com os zooms (ex.: whoosh)" },
+  { id: "destaque", label: "Destaque", hint: "entra na palavra destacada (ex.: pop)" },
+  { id: "oferta", label: "Oferta", hint: "entra no preço ou desconto (ex.: ding)" },
+  { id: "outro", label: "Outro", hint: "só uso manual" },
+];

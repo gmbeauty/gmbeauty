@@ -12,6 +12,8 @@ from .ass import SAFE_BOTTOM_PCT, SAFE_LEFT_PCT, SAFE_TOP_PCT, build_ass
 from .cuts import TimeMap, cut_ranges, keep_ranges
 from .zoom import ffmpeg_zoom_expr, plan_zoom
 
+SFX_MAX_SEC = 5.0  # um efeito nunca passa disso
+
 OUT_W, OUT_H = 1080, 1920
 
 
@@ -58,6 +60,7 @@ def render(
     silences: list[tuple[float, float]],
     settings: RenderSettings,
     logo: Path | None,
+    sfx: list[tuple[float, Path]],
     on_progress: Callable[[float], None],
 ) -> None:
     cuts = cut_ranges(silences, settings.silence_min_sec) if settings.remove_silences else []
@@ -103,12 +106,38 @@ def render(
     fonts = f":fontsdir={config.CAPTION_FONTS_DIR}" if config.CAPTION_FONTS_DIR else ""
     stages.append(f"[{last}]ass=captions.ass{fonts}[outv]")  # caminho relativo: cwd = work_dir
 
+    # --- efeitos sonoros: cada um entra no seu instante (já remapeado pelos cortes) e é mixado à fala ---
+    sfx_inputs: list[Path] = []
+    mixed_audio = False
+    if has_audio and settings.sfx_enabled and sfx:
+        n_in = 2 if (settings.logo_position != "none" and logo) else 1  # entradas já usadas: vídeo (+ logo)
+        labels = []
+        for t, path in sfx:
+            out_t = tmap(t) if cuts else t
+            if out_t >= out_duration - 0.2:
+                continue
+            k = n_in + len(sfx_inputs)
+            sfx_inputs.append(path)
+            ms = round(out_t * 1000)
+            stages.append(
+                f"[{k}:a]atrim=0:{SFX_MAX_SEC},aformat=sample_rates=44100:channel_layouts=stereo,"
+                f"volume={settings.sfx_gain_db:.1f}dB,adelay={ms}|{ms}[sx{len(labels)}]"
+            )
+            labels.append(f"[sx{len(labels)}]")
+        if labels:
+            base = "[a]" if cuts else "[0:a]"
+            stages.append(f"{base}aformat=sample_rates=44100:channel_layouts=stereo[am]")
+            stages.append(f"[am]{''.join(labels)}amix=inputs={len(labels) + 1}:normalize=0:duration=first:dropout_transition=0[aout]")
+            mixed_audio = True
+
     cmd = [config.FFMPEG, "-y", "-v", "error", "-nostats", "-progress", "pipe:1", "-i", str(video)]
     if settings.logo_position != "none" and logo:
         cmd += ["-i", str(logo)]
+    for p_ in sfx_inputs:
+        cmd += ["-i", str(p_)]
     cmd += ["-filter_complex", ";".join(stages), "-map", "[outv]"]
     if has_audio:
-        cmd += ["-map", "[a]" if cuts else "0:a:0"]
+        cmd += ["-map", "[aout]" if mixed_audio else ("[a]" if cuts else "0:a:0")]
     cmd += ["-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p"]
     if has_audio:
         cmd += ["-c:a", "aac", "-b:a", "192k"]

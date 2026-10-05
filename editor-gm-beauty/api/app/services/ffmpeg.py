@@ -97,3 +97,16 @@ def detect_silences(audio: Path, duration: float, min_sec: float = 0.5, noise_db
     if start is not None:  # silêncio que vai até o fim do arquivo
         ranges.append((start, duration))
     return ranges
+
+
+def probe_audio(path: Path) -> float:
+    """Duração (s) de um arquivo de som; erro amigável se não for áudio."""
+    msg = "Não conseguimos ler este arquivo de som. Verifique se ele não está corrompido."
+    proc = _run([config.FFPROBE, "-v", "error", "-print_format", "json", "-show_format", "-show_streams", str(path)], msg, timeout=60)
+    data = json.loads(proc.stdout or "{}")
+    if not any(s.get("codec_type") == "audio" for s in data.get("streams", [])):
+        raise ProcessingError(msg, "no audio stream")
+    duration = float(data.get("format", {}).get("duration") or 0)
+    if duration <= 0:
+        raise ProcessingError(msg, "zero duration")
+    return duration
