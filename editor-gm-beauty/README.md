@@ -27,7 +27,7 @@ Fluxo: **upload → escolher tipo e estilo → edição automática → revisar 
 | Programa | Mac | Windows |
 |---|---|---|
 | Node.js (LTS) | https://nodejs.org | https://nodejs.org |
-| Python 3 | https://www.python.org/downloads | https://www.python.org/downloads (marque **“Add python.exe to PATH”**) |
+| Python **3.12** (recomendado; versões muito novas podem não instalar alguns componentes) | https://www.python.org/downloads | https://www.python.org/downloads/windows/ (marque **“Add python.exe to PATH”**) |
 | FFmpeg 4.4 ou mais novo | instale o Homebrew (https://brew.sh) e rode `brew install ffmpeg` | no Prompt de Comando: `winget install ffmpeg` |
 
 **2. Baixe o editor**
@@ -54,7 +54,7 @@ Na primeira vez ele instala o que falta (alguns minutos, precisa de internet) e 
 
 ## Comandos manuais (alternativa ao iniciador)
 
-Requisitos: os mesmos 3 programas acima. Abra dois terminais.
+Requisitos: os mesmos 3 programas acima. Abra dois terminais. (No Windows use `py -3` no lugar de `python3` e `.venv\Scripts\activate` no lugar de `source .venv/bin/activate`.)
 
 **Terminal 1 — servidor (API)**
 ```bash
