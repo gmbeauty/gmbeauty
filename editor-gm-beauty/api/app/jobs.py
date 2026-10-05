@@ -10,7 +10,7 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
 from . import storage
-from .db import DictionaryTerm, Project, SessionLocal, SfxSound
+from .db import BrollClip, DictionaryTerm, Project, SessionLocal, SfxSound
 from .errors import GENERIC_MESSAGE, ProcessingError, logger
 from .schemas import Caption, RenderSettings
 from .services import captions as captions_svc
@@ -102,6 +102,7 @@ def export(db, project_id: str) -> None:
         settings=settings,
         logo=storage.logo_path(),
         sfx=_sfx_files(db, p),
+        broll=_broll_files(db, p),
         on_progress=on_progress,
     )
     tmp.replace(out)
@@ -115,6 +116,16 @@ def _sfx_files(db, p: Project) -> list[tuple[float, Path]]:
         snd = db.get(SfxSound, ev["sfxId"])
         if snd and storage.sfx_file(snd.id, snd.ext).exists():
             out.append((float(ev["startSec"]), storage.sfx_file(snd.id, snd.ext)))
+    return sorted(out)
+
+
+def _broll_files(db, p: Project) -> list[tuple[float, float, Path, int, int]]:
+    """B-roll do projeto cujos clipes ainda existem na Biblioteca GM."""
+    out = []
+    for ev in p.broll_events or []:
+        clip = db.get(BrollClip, ev["clipId"])
+        if clip and storage.broll_file(clip.id, clip.ext).exists():
+            out.append((float(ev["startSec"]), float(ev["endSec"]), storage.broll_file(clip.id, clip.ext), clip.width, clip.height))
     return sorted(out)
 
 

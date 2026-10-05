@@ -10,13 +10,14 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from .. import config, jobs, storage
-from ..db import DictionaryTerm, Project, SfxSound, _new_id, get_db
+from ..db import BrollClip, DictionaryTerm, Project, SfxSound, _new_id, get_db
 from ..errors import ProcessingError, logger
 from ..schemas import (
     Caption,
     CaptionsIn,
     DictionaryIn,
     HighlightsIn,
+    BrollEventsIn,
     InsightsOut,
     SfxEventsIn,
     ProjectOut,
@@ -24,7 +25,7 @@ from ..schemas import (
     RenderSettings,
 )
 from ..services import captions as captions_svc
-from ..services import ffmpeg, hook, sfx, zoom
+from ..services import broll, ffmpeg, hook, sfx, zoom
 
 router = APIRouter()
 ALLOWED_EXT = {".mp4", ".mov"}
@@ -42,6 +43,7 @@ def _out(p: Project) -> ProjectOut:
     data = {c.name: getattr(p, c.name) for c in Project.__table__.columns}
     data["settings"] = RenderSettings(**(p.settings or {}))
     data["sfx_events"] = p.sfx_events or []
+    data["broll_events"] = p.broll_events or []
     return ProjectOut.model_validate(data)
 
 
@@ -154,6 +156,7 @@ def duplicate_project(project_id: str, db: Session = Depends(get_db)):
         captions=json.loads(json.dumps(src.captions)),
         silences=json.loads(json.dumps(src.silences)),
         sfx_events=json.loads(json.dumps(src.sfx_events or [])),
+        broll_events=json.loads(json.dumps(src.broll_events or [])),
         analyzed=src.analyzed,
     )
     shutil.copyfile(storage.original(src.id, src.ext), storage.original(copy.id, copy.ext))
@@ -313,6 +316,45 @@ def put_sfx(project_id: str, body: SfxEventsIn, db: Session = Depends(get_db)):
     known = {s.id for s in db.query(SfxSound).filter_by(owner_id="local")}
     events = [e.model_dump(by_alias=True) for e in body.events if e.sfx_id in known and e.start_sec <= p.duration_sec]
     p.sfx_events = sorted(events, key=lambda e: e["startSec"])
+    if p.status == "ready":
+        p.status = "draft"
+    db.commit()
+    return _out(p)
+
+
+# ---------- B-roll (Fase 11) ----------
+
+@router.post("/projects/{project_id}/broll/suggest", response_model=ProjectOut, response_model_by_alias=True)
+def suggest_broll(project_id: str, db: Session = Depends(get_db)):
+    """Sugere B-roll onde a fala cita um produto etiquetado na Biblioteca GM (a pessoa revisa)."""
+    p = _get(db, project_id)
+    clips = db.query(BrollClip).filter_by(owner_id="local").all()
+    if not clips:
+        raise HTTPException(400, "A Biblioteca GM ainda não tem clipes de B-roll. Envie alguns em “Biblioteca”.")
+    caps = [Caption(**c) for c in p.captions]
+    p.broll_events = broll.plan_broll(caps, [broll.Clip(c.id, c.tag, c.duration_sec) for c in clips], p.duration_sec)
+    if p.status == "ready":
+        p.status = "draft"
+    db.commit()
+    return _out(p)
+
+
+@router.put("/projects/{project_id}/broll", response_model=ProjectOut, response_model_by_alias=True)
+def put_broll(project_id: str, body: BrollEventsIn, db: Session = Depends(get_db)):
+    p = _get(db, project_id)
+    clips = {c.id: c for c in db.query(BrollClip).filter_by(owner_id="local")}
+    events = []
+    for e in body.events:
+        clip = clips.get(e.clip_id)
+        if not clip or e.start_sec >= p.duration_sec:
+            continue
+        end = min(e.end_sec, e.start_sec + clip.duration_sec, p.duration_sec)  # nunca mais longo que o clipe
+        if end - e.start_sec < broll.MIN_SEC:
+            continue
+        d = e.model_dump(by_alias=True)
+        d["endSec"] = round(end, 2)
+        events.append(d)
+    p.broll_events = sorted(events, key=lambda e: e["startSec"])
     if p.status == "ready":
         p.status = "draft"
     db.commit()

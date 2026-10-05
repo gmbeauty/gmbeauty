@@ -54,3 +54,17 @@ def sfx_dir() -> Path:
 
 def sfx_file(sound_id: str, ext: str) -> Path:
     return sfx_dir() / f"{sound_id}{ext}"
+
+
+def broll_dir() -> Path:
+    d = config.DATA_DIR / "library" / "broll"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def broll_file(clip_id: str, ext: str) -> Path:
+    return broll_dir() / f"{clip_id}{ext}"
+
+
+def broll_thumb(clip_id: str) -> Path:
+    return broll_dir() / f"{clip_id}.jpg"

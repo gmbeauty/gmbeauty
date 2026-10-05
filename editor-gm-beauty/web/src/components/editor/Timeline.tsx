@@ -1,6 +1,6 @@
 import { allCuts } from "@/lib/cuts";
 import { formatDuration } from "@/lib/format";
-import type { CaptionSegment, RenderSettings, SfxEvent, SilenceRange, ZoomEvent } from "@/lib/types";
+import type { CaptionSegment, BrollEvent, RenderSettings, SfxEvent, SilenceRange, ZoomEvent } from "@/lib/types";
 
 export function Timeline({
   durationSec,
@@ -8,6 +8,7 @@ export function Timeline({
   silences,
   zoomPlan,
   sfxEvents,
+  brollEvents,
   settings,
   selectedId,
   currentSec,
@@ -19,6 +20,7 @@ export function Timeline({
   silences: SilenceRange[];
   zoomPlan: ZoomEvent[];
   sfxEvents: SfxEvent[];
+  brollEvents: BrollEvent[];
   settings: RenderSettings;
   selectedId: string | null;
   currentSec: number;
@@ -37,14 +39,15 @@ export function Timeline({
           <span>{formatDuration(durationSec)}</span>
         </div>
         <div className="flex gap-2">
-          <div className="grid w-22 shrink-0 grid-rows-5 gap-2 text-xs text-gm-muted">
+          <div className="grid w-22 shrink-0 grid-rows-6 gap-2 text-xs text-gm-muted">
             <span className="flex items-center">🎬 Vídeo</span>
             <span className="flex items-center">💬 Legendas</span>
             <span className="flex items-center">✂️ Cortes</span>
             <span className="flex items-center">🔍 Zoom</span>
             <span className="flex items-center">🔊 Sons</span>
+            <span className="flex items-center">🎞️ B-roll</span>
           </div>
-          <div className="relative grid flex-1 grid-rows-5 gap-2">
+          <div className="relative grid flex-1 grid-rows-6 gap-2">
             {/* Vídeo: clique para ir a um ponto */}
             <button
               type="button"
@@ -104,6 +107,18 @@ export function Timeline({
                   title="Efeito sonoro"
                   className={`absolute inset-y-2 w-1.5 rounded-full ${settings.sfxEnabled ? "bg-gm-purple" : "bg-gm-lilac-mid"}`}
                   style={{ left: pct(e.startSec) }}
+                />
+              ))}
+            </div>
+
+            {/* B-roll: trechos em que um clipe seu cobre a imagem */}
+            <div className="relative h-10 rounded-md bg-gm-bg">
+              {brollEvents.map((e) => (
+                <div
+                  key={e.id}
+                  title="B-roll"
+                  className={`absolute inset-y-2 rounded-md ${settings.brollEnabled ? "bg-gm-lilac" : "bg-gm-lilac-mid"}`}
+                  style={{ left: pct(e.startSec), width: w(e.startSec, e.endSec) }}
                 />
               ))}
             </div>

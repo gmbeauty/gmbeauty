@@ -1,5 +1,5 @@
 // Único ponto de comunicação com o backend (FastAPI).
-import type { CaptionSegment, HighlightStrategy, Insights, Project, RenderSettings, SfxCategory, SfxEvent, SfxSound } from "./types";
+import type { CaptionSegment, HighlightStrategy, Insights, Project, RenderSettings, SfxCategory, SfxEvent, SfxSound, BrollClip, BrollEvent } from "./types";
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -72,6 +72,23 @@ export async function uploadSfx(file: File, name: string, category: SfxCategory)
   form.append("name", name);
   form.append("category", category);
   return request<SfxSound>("/library/sfx", { method: "POST", body: form });
+}
+
+export const listBroll = () => request<BrollClip[]>("/library/broll");
+export const deleteBroll = (id: string) => request<void>(`/library/broll/${id}`, { method: "DELETE" });
+export const patchBroll = (id: string, patch: Partial<Pick<BrollClip, "name" | "tag">>) =>
+  request<BrollClip>(`/library/broll/${id}`, json("PATCH", patch));
+export const brollVideoUrl = (id: string) => `${API_URL}/library/broll/${id}/video`;
+export const brollThumbUrl = (id: string) => `${API_URL}/library/broll/${id}/thumbnail`;
+export const suggestBroll = (projectId: string) => request<Project>(`/projects/${projectId}/broll/suggest`, { method: "POST" });
+export const saveBroll = (projectId: string, events: BrollEvent[]) => request<Project>(`/projects/${projectId}/broll`, json("PUT", { events }));
+
+export async function uploadBroll(file: File, name: string, tag: string): Promise<BrollClip> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("name", name);
+  form.append("tag", tag);
+  return request<BrollClip>("/library/broll", { method: "POST", body: form });
 }
 
 export async function hasLogo(): Promise<boolean> {

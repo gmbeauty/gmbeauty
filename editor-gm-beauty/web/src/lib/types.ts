@@ -26,6 +26,7 @@ export interface RenderSettings {
   zoomMode: ZoomMode;
   sfxEnabled: boolean;
   sfxGainDb: number; // volume do efeito sobre a fala (dB, negativo)
+  brollEnabled: boolean;
   logoPosition: LogoPosition;
   logoSizePct: number;
   logoOpacity: number;
@@ -69,6 +70,7 @@ export interface Project {
   captions: CaptionSegment[];
   silences: SilenceRange[];
   sfxEvents: SfxEvent[];
+  brollEvents: BrollEvent[];
   analyzed: boolean;
   hasOutput: boolean;
   errorMessage: string | null;
@@ -125,3 +127,20 @@ export const SFX_CATEGORIES: { id: SfxCategory; label: string; hint: string }[] 
   { id: "oferta", label: "Oferta", hint: "entra no preço ou desconto (ex.: ding)" },
   { id: "outro", label: "Outro", hint: "só uso manual" },
 ];
+
+export interface BrollClip {
+  id: string;
+  name: string;
+  tag: string; // como o produto é falado; variações separadas por vírgula
+  durationSec: number;
+  width: number;
+  height: number;
+  createdAt: string;
+}
+
+export interface BrollEvent {
+  id: string;
+  startSec: number; // no tempo do vídeo original
+  endSec: number;
+  clipId: string;
+}

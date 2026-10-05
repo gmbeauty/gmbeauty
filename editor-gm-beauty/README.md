@@ -4,7 +4,7 @@ Transforme vídeos brutos em conteúdo pronto para postar.
 
 Fluxo: **upload → escolher tipo e estilo → edição automática → revisar → exportar** (MP4 H.264, 1080×1920, 9:16).
 
-## O que já funciona (Fases 1–10 e 12)
+## O que já funciona (Fases 1–12, menos a 13)
 
 - Dashboard com projetos (miniatura, status, duplicar, excluir permanente).
 - Upload de MP4/MOV com barra de progresso.
@@ -17,6 +17,7 @@ Fluxo: **upload → escolher tipo e estilo → edição automática → revisar 
 - Exportação 9:16 e download.
 - **Zoom automático** (Desligado / Sutil / Dinâmico): aproximações suaves e espaçadas, até 5% (sutil) ou 9% (dinâmico), sem mexer em logo e legendas. GM Produto vem com zoom desligado para o produto ficar inteiro e parado.
 - **Efeitos sonoros + Biblioteca GM:** você envia seus próprios sons (Transição, Destaque, Oferta) em “Biblioteca”. O editor sugere onde colocar (início de zoom, palavra destacada, preço), com no mínimo 1,5 s entre efeitos e no máximo um a cada ~6 s. Você revisa a lista (remove, troca o som, adiciona manualmente), ajusta o volume (padrão −14 dB) e exporta. A prévia toca os efeitos. Confira a licença de cada som que enviar.
+- **B-roll:** na Biblioteca você envia clipes seus (MP4/MOV) e escreve **como o produto é falado** em cada um (ex.: “base Ruby Rose, base da Ruby Rose”). O editor só sugere o clipe quando a fala cita esse nome: nunca nos primeiros 1,5 s, com 3 s de intervalo entre eles e no máximo 40% do vídeo coberto. O B-roll cobre a imagem e a sua fala continua. Você revisa a lista (troca o clipe, ajusta a duração, remove, adiciona) e a prévia mostra o resultado. GM Produto já vem com B-roll ligado.
 - **Análise do gancho** dos primeiros 3 s: checa início rápido, abertura que chama a pessoa, legenda curta e destaque; oferece cortar o silêncio inicial e destacar a palavra do gancho. É uma checagem por regras sobre a transcrição (não é IA).
 
 ## O que você precisa instalar
@@ -67,6 +68,6 @@ cd web && npm run lint && npm run build
 - Valores da zona segura são aproximados; ajuste em `web/src/lib/safe-zone.ts` e `api/app/services/ass.py` (mantenha os dois iguais).
 - Fonte das legendas é definida no servidor; ainda não há escolha de fonte na tela.
 
-Ainda não feitas: B-roll (Fase 11) e IA analisando roteiro e retenção (Fase 14). Música automática (Fase 13) está fora do plano: contas comerciais têm restrição de música; o mais seguro é escolher a faixa dentro do Instagram/TikTok ao postar.
+Ainda não feita: IA analisando roteiro e retenção (Fase 14, exigiria uma chave de API paga). Música automática (Fase 13) está fora do plano: contas comerciais têm restrição de música; o mais seguro é escolher a faixa dentro do Instagram/TikTok ao postar.
 
 Veja `ARCHITECTURE.md` para as decisões técnicas.

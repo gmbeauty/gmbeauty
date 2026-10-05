@@ -164,3 +164,32 @@ def test_sfx_uses_only_categories_present_and_respects_caption_mode():
     # legenda tradicional não mostra destaque, então não há som de destaque
     ev = sfx_svc.plan_sfx(caps, [], RenderSettings(caption_mode="traditional"), SOUNDS, 10)
     assert ev == []
+
+
+# ---------- Fase 11: B-roll ----------
+from app.services import broll as broll_svc  # noqa: E402
+
+
+def _bcaps():
+    caps = _caps([(0.2, 2.0, "Você ainda aplica base"), (4.1, 6.0, "essa base Ruby Rose é ótima"), (10.5, 12.5, "olha a Ruby Rose de novo"), (14.0, 16.0, "e o gloss brilhante")])
+    return caps
+
+
+def test_broll_only_where_product_is_mentioned():
+    clips = [broll_svc.Clip("c1", "base Ruby Rose, ruby rose", 5.0), broll_svc.Clip("c2", "kit renovação", 5.0)]
+    ev = broll_svc.plan_broll(_bcaps(), clips, 20)
+    assert [e["clipId"] for e in ev] == ["c1", "c1"]  # "kit renovação" nunca é falado: sem B-roll
+    assert ev[0]["startSec"] >= broll_svc.HOOK_SAFE_SEC
+    assert all(e["endSec"] - e["startSec"] <= broll_svc.DEFAULT_SEC + 1e-6 for e in ev)
+    assert all(b["startSec"] - a["endSec"] >= broll_svc.MIN_GAP_SEC - 1e-6 for a, b in zip(ev, ev[1:]))
+
+
+def test_broll_respects_hook_coverage_and_clip_length():
+    clips = [broll_svc.Clip("c1", "ainda aplica", 5.0)]  # citado em 0,2 s: empurrado para depois do gancho
+    ev = broll_svc.plan_broll(_bcaps(), clips, 20)
+    assert ev and ev[0]["startSec"] == broll_svc.HOOK_SAFE_SEC
+    short = [broll_svc.Clip("c1", "ainda aplica", 1.0)]
+    assert broll_svc.plan_broll(_bcaps(), short, 20)[0]["endSec"] - 1.5 == 1.0  # não passa do tamanho do clipe
+    assert broll_svc.plan_broll(_bcaps(), [broll_svc.Clip("c1", "ainda aplica", 0.5)], 20) == []  # curto demais
+    assert broll_svc.plan_broll(_bcaps(), clips, 4.0) == []  # sem espaço no vídeo
+    assert broll_svc.plan_broll(_bcaps(), [], 20) == []

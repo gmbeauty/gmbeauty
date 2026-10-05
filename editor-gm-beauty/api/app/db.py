@@ -46,6 +46,7 @@ class Project(Base):
     captions: Mapped[list] = mapped_column(JSON, default=list)
     silences: Mapped[list] = mapped_column(JSON, default=list)
     sfx_events: Mapped[list | None] = mapped_column(JSON, default=list)  # efeitos sonoros posicionados
+    broll_events: Mapped[list | None] = mapped_column(JSON, default=list)  # B-roll posicionados
     analyzed: Mapped[bool] = mapped_column(Boolean, default=False)
     has_output: Mapped[bool] = mapped_column(Boolean, default=False)
 
@@ -67,6 +68,22 @@ class SfxSound(Base):
     category: Mapped[str] = mapped_column(String, default="outro")  # transicao|destaque|oferta|outro
     ext: Mapped[str] = mapped_column(String, default=".mp3")
     duration_sec: Mapped[float] = mapped_column(Float, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class BrollClip(Base):
+    """Clipe de B-roll da Biblioteca GM (vídeo seu de produto/aplicação)."""
+
+    __tablename__ = "broll_clips"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_new_id)
+    owner_id: Mapped[str] = mapped_column(String, default="local", index=True)
+    name: Mapped[str] = mapped_column(String)
+    tag: Mapped[str] = mapped_column(String, default="")  # como o produto é falado; variações separadas por vírgula
+    ext: Mapped[str] = mapped_column(String, default=".mp4")
+    duration_sec: Mapped[float] = mapped_column(Float, default=0)
+    width: Mapped[int] = mapped_column(Integer, default=0)
+    height: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 

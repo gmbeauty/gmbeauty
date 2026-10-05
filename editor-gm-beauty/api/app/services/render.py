@@ -13,19 +13,20 @@ from .cuts import TimeMap, cut_ranges, keep_ranges
 from .zoom import ffmpeg_zoom_expr, plan_zoom
 
 SFX_MAX_SEC = 5.0  # um efeito nunca passa disso
+MIN_BROLL_SEC = 0.8  # B-roll mais curto que isso não vale a troca de imagem
 
 OUT_W, OUT_H = 1080, 1920
 
 
-def _fit_stage(src_w: int, src_h: int) -> str:
+def _fit_stage(src_w: int, src_h: int, src: str = "v", dst: str = "fit") -> str:
     """Enquadra em 1080x1920 sem cortar o produto: se não for vertical, usa fundo desfocado."""
     if abs(src_w / src_h - OUT_W / OUT_H) < 0.01:
-        return f"[v]scale={OUT_W}:{OUT_H},setsar=1[fit]"
+        return f"[{src}]scale={OUT_W}:{OUT_H},setsar=1[{dst}]"
     return (
-        f"[v]split=2[bg][fg];"
-        f"[bg]scale={OUT_W}:{OUT_H}:force_original_aspect_ratio=increase,crop={OUT_W}:{OUT_H},boxblur=25:3[bgb];"
-        f"[fg]scale={OUT_W}:{OUT_H}:force_original_aspect_ratio=decrease[fgs];"
-        f"[bgb][fgs]overlay=(W-w)/2:(H-h)/2,setsar=1[fit]"
+        f"[{src}]split=2[{dst}bg][{dst}fg];"
+        f"[{dst}bg]scale={OUT_W}:{OUT_H}:force_original_aspect_ratio=increase,crop={OUT_W}:{OUT_H},boxblur=25:3[{dst}bgb];"
+        f"[{dst}fg]scale={OUT_W}:{OUT_H}:force_original_aspect_ratio=decrease[{dst}fgs];"
+        f"[{dst}bgb][{dst}fgs]overlay=(W-w)/2:(H-h)/2,setsar=1[{dst}]"
     )
 
 
@@ -61,6 +62,7 @@ def render(
     settings: RenderSettings,
     logo: Path | None,
     sfx: list[tuple[float, Path]],
+    broll: list[tuple[float, float, Path, int, int]],
     on_progress: Callable[[float], None],
 ) -> None:
     cuts = cut_ranges(silences, settings.silence_min_sec) if settings.remove_silences else []
@@ -69,6 +71,23 @@ def render(
     keeps = keep_ranges(duration, cuts)
     tmap = TimeMap(keeps)
     out_duration = tmap.total if cuts else duration
+
+    # Entradas extras do FFmpeg, na ordem: vídeo(0), logo, efeitos sonoros, B-roll.
+    use_logo = settings.logo_position != "none" and logo is not None
+    sfx_used: list[tuple[float, Path]] = []
+    if has_audio and settings.sfx_enabled:
+        for t, path in sfx:
+            out_t = tmap(t) if cuts else t
+            if out_t < out_duration - 0.2:
+                sfx_used.append((out_t, path))
+    broll_used: list[tuple[float, float, Path, int, int]] = []
+    if settings.broll_enabled:
+        for st, en, path, cw, ch in broll:
+            a, b = (tmap(st), tmap(en)) if cuts else (st, en)
+            if b - a >= MIN_BROLL_SEC:
+                broll_used.append((a, min(b, out_duration), path, cw, ch))
+    sfx_base = 1 + (1 if use_logo else 0)
+    broll_base = sfx_base + len(sfx_used)
 
     (work_dir / "captions.ass").write_text(build_ass(captions, settings, tmap if cuts else None), encoding="utf-8")
 
@@ -99,7 +118,13 @@ def render(
             f"crop={OUT_W}:{OUT_H},setsar=1[zoomed]"
         )
         last = "zoomed"
-    if settings.logo_position != "none" and logo:
+    for i, (a, b, _path, cw, ch) in enumerate(broll_used):  # B-roll cobre a imagem (sem zoom), a fala continua
+        k = broll_base + i
+        stages.append(f"[{k}:v]trim=0:{b - a:.3f},setpts=PTS-STARTPTS+{a:.3f}/TB[bv{i}]")
+        stages.append(_fit_stage(cw, ch, f"bv{i}", f"bf{i}"))
+        stages.append(f"[{last}][bf{i}]overlay=enable='between(t,{a:.3f},{b:.3f})':eof_action=pass[bo{i}]")
+        last = f"bo{i}"
+    if use_logo:
         f, last = _logo_stage(settings, last)
         stages.append(f)
 
@@ -107,33 +132,27 @@ def render(
     stages.append(f"[{last}]ass=captions.ass{fonts}[outv]")  # caminho relativo: cwd = work_dir
 
     # --- efeitos sonoros: cada um entra no seu instante (já remapeado pelos cortes) e é mixado à fala ---
-    sfx_inputs: list[Path] = []
     mixed_audio = False
-    if has_audio and settings.sfx_enabled and sfx:
-        n_in = 2 if (settings.logo_position != "none" and logo) else 1  # entradas já usadas: vídeo (+ logo)
+    if sfx_used:
         labels = []
-        for t, path in sfx:
-            out_t = tmap(t) if cuts else t
-            if out_t >= out_duration - 0.2:
-                continue
-            k = n_in + len(sfx_inputs)
-            sfx_inputs.append(path)
+        for j, (out_t, _path) in enumerate(sfx_used):
             ms = round(out_t * 1000)
             stages.append(
-                f"[{k}:a]atrim=0:{SFX_MAX_SEC},aformat=sample_rates=44100:channel_layouts=stereo,"
-                f"volume={settings.sfx_gain_db:.1f}dB,adelay={ms}|{ms}[sx{len(labels)}]"
+                f"[{sfx_base + j}:a]atrim=0:{SFX_MAX_SEC},aformat=sample_rates=44100:channel_layouts=stereo,"
+                f"volume={settings.sfx_gain_db:.1f}dB,adelay={ms}|{ms}[sx{j}]"
             )
-            labels.append(f"[sx{len(labels)}]")
-        if labels:
-            base = "[a]" if cuts else "[0:a]"
-            stages.append(f"{base}aformat=sample_rates=44100:channel_layouts=stereo[am]")
-            stages.append(f"[am]{''.join(labels)}amix=inputs={len(labels) + 1}:normalize=0:duration=first:dropout_transition=0[aout]")
-            mixed_audio = True
+            labels.append(f"[sx{j}]")
+        base = "[a]" if cuts else "[0:a]"
+        stages.append(f"{base}aformat=sample_rates=44100:channel_layouts=stereo[am]")
+        stages.append(f"[am]{''.join(labels)}amix=inputs={len(labels) + 1}:normalize=0:duration=first:dropout_transition=0[aout]")
+        mixed_audio = True
 
     cmd = [config.FFMPEG, "-y", "-v", "error", "-nostats", "-progress", "pipe:1", "-i", str(video)]
-    if settings.logo_position != "none" and logo:
+    if use_logo:
         cmd += ["-i", str(logo)]
-    for p_ in sfx_inputs:
+    for _t, p_ in sfx_used:
+        cmd += ["-i", str(p_)]
+    for _a, _b, p_, _w, _h in broll_used:
         cmd += ["-i", str(p_)]
     cmd += ["-filter_complex", ";".join(stages), "-map", "[outv]"]
     if has_audio:

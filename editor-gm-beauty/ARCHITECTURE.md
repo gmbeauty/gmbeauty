@@ -38,7 +38,7 @@ editor-gm-beauty/
 SQLite local por padrão (`DATABASE_URL` troca para PostgreSQL/Supabase sem mudar o código).
 
 - `projects`: id, **owner_id** (hoje sempre "local"), nome, status (draft/processing/ready/error), etapa e progresso, tipo de conteúdo, estilo, dados do vídeo, `settings` (JSON), `captions` (JSON), `silences` (JSON), mensagem de erro para a pessoa e **detalhe técnico separado**.
-- `sfx_sounds`: Biblioteca GM (efeitos sonoros enviados por você; categoria e duração).
+- `sfx_sounds` e `broll_clips`: Biblioteca GM (efeitos sonoros e clipes de B-roll enviados por você).
 - `dictionary_terms`: Dicionário GM Beauty (marcas e produtos). Já é enviado ao Whisper como dica de vocabulário; falta só a tela de cadastro.
 - Legendas e silêncios ficam em JSON dentro do projeto (sempre lidos/gravados juntos); se um dia precisarmos consultar por palavra, viram tabelas próprias.
 
@@ -76,11 +76,12 @@ Frontend: Next.js, React, TypeScript, Tailwind CSS. Backend: FastAPI, SQLAlchemy
 - **Fase 10 (gancho):** `services/hook.py` faz 4 checagens simples nos primeiros 3 s (início rápido, abertura que chama a pessoa, 1ª legenda curta, destaque). "Cortar início" vira o ajuste `trimStartSec`, aplicado como um corte a mais no mesmo mecanismo dos silêncios.
 
 - **Fase 12 (efeitos sonoros):** tabela `sfx_sounds` + arquivos em `storage/library/sfx/` (rotas `/library/sfx`). `services/sfx.py` sugere eventos por regras (transição no início do zoom, destaque na palavra marcada, oferta no preço; prioridade oferta > destaque > transição; intervalo mínimo de 1,5 s; ~1 a cada 6 s). Os eventos ficam em `projects.sfx_events` (JSON, editável pela pessoa). No `render.py` cada efeito vira uma entrada de áudio com `adelay` (instante já remapeado pelos cortes) e `volume`, mixada à fala com `amix=normalize=0` (por isso FFmpeg 4.4+).
+- **Fase 11 (B-roll):** tabela `broll_clips` (nome, etiqueta “como é falado”, duração, resolução) + arquivos em `storage/library/broll/`. `services/broll.py` procura a etiqueta (e variações) como sequência de palavras nas legendas; usa o tempo da palavra quando existe. Regras: não antes de 1,5 s, intervalo de 3 s, duração padrão 2,5 s (nunca maior que o clipe) e no máximo 40% do vídeo. Eventos em `projects.broll_events` (editáveis). No `render.py` cada clipe vira uma entrada de vídeo, enquadrada como o vídeo principal (fundo desfocado se não for vertical) e sobreposta com `overlay enable=between(t,...)` depois do zoom e antes de logo/legenda; o áudio do clipe é ignorado.
 - **Migração do banco:** `db._add_missing_columns()` acrescenta colunas novas em bancos criados em fases anteriores (ex.: `sfx_events`), sem apagar nada.
 
 ## Para as próximas fases
 
-O render é um grafo de filtros em etapas (`render.py`); B-roll (Fase 11) entra como mais uma etapa de vídeo, usando a mesma Biblioteca GM (nova seção em `/biblioteca`, com etiqueta por produto). Música (Fase 13) fica fora do plano por causa de restrições de música em contas comerciais. IA (Fase 14) exigiria uma chave de API paga e leria só a transcrição. Remotion continua adiado.
+Música (Fase 13) fica fora do plano por causa de restrições de música em contas comerciais (a faixa é escolhida dentro do Instagram/TikTok ao postar). IA (Fase 14) exigiria uma chave de API paga e leria só a transcrição. Remotion continua adiado.
 
 ## Antes de colocar online
 

@@ -8,12 +8,13 @@ import { Timeline } from "./Timeline";
 import { VideoPreview } from "./VideoPreview";
 import { HookCard } from "./HookCard";
 import { SfxCard } from "./SfxCard";
+import { BrollCard } from "./BrollCard";
 import {
   analyzeProject, applyHighlightStrategy, exportProject, getInsights, getProject, hasLogo as fetchHasLogo,
-  highlightHook, listSfx, patchProject, saveSfx, sfxAudioUrl, suggestSfx, removeLogo, saveCaptions, uploadLogo, urls,
+  highlightHook, listBroll, listSfx, patchProject, saveBroll, saveSfx, suggestBroll, sfxAudioUrl, suggestSfx, removeLogo, saveCaptions, uploadLogo, urls,
 } from "@/lib/api";
 import { settingsForPreset } from "@/lib/presets";
-import type { CaptionSegment, ContentTypeId, Insights, Project, RenderSettings, SfxEvent, SfxSound, StylePresetId } from "@/lib/types";
+import type { CaptionSegment, ContentTypeId, Insights, Project, RenderSettings, SfxEvent, SfxSound, StylePresetId, BrollClip, BrollEvent } from "@/lib/types";
 
 const STEPS: { stage: string; label: string }[] = [
   { stage: "audio", label: "Extraindo o áudio" },
@@ -31,6 +32,9 @@ export function EditorWorkspace({ id }: { id: string }) {
   const [insights, setInsights] = useState<Insights>({ zoomPlan: [], hook: null });
   const [sfxEvents, setSfxEvents] = useState<SfxEvent[]>([]);
   const [sfxSounds, setSfxSounds] = useState<SfxSound[]>([]);
+  const [brollEvents, setBrollEvents] = useState<BrollEvent[]>([]);
+  const [brollClips, setBrollClips] = useState<BrollClip[]>([]);
+  const [brollSuggested, setBrollSuggested] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [currentSec, setCurrentSec] = useState(0);
   const [showSafeZone, setShowSafeZone] = useState(true);
@@ -64,11 +68,15 @@ export function EditorWorkspace({ id }: { id: string }) {
     let cancelled = false;
     (async () => {
       try {
-        const [p, logo, sounds] = await Promise.all([getProject(id), fetchHasLogo(), listSfx().catch(() => [] as SfxSound[])]);
+        const [p, logo, sounds, clips] = await Promise.all([
+          getProject(id), fetchHasLogo(), listSfx().catch(() => [] as SfxSound[]), listBroll().catch(() => [] as BrollClip[]),
+        ]);
         if (cancelled) return;
         setProject(p);
         setSfxEvents(p.sfxEvents);
         setSfxSounds(sounds);
+        setBrollEvents(p.brollEvents);
+        setBrollClips(clips);
         setSettings(p.settings);
         setCaptions(p.captions);
         setSelectedId(p.captions[0]?.id ?? null);
@@ -185,6 +193,36 @@ export function EditorWorkspace({ id }: { id: string }) {
     a.volume = Math.min(1, 10 ** ((settings?.sfxGainDb ?? -14) / 20));
     a.play().catch(() => {});
   };
+
+  async function persistBroll(next: BrollEvent[]) {
+    setBrollEvents(next.slice().sort((a, b) => a.startSec - b.startSec));
+    try {
+      const p = await saveBroll(id, next);
+      setBrollEvents(p.brollEvents);
+    } catch (e) {
+      setError(msg(e));
+    }
+  }
+
+  async function doSuggestBroll() {
+    setError(null);
+    try {
+      const p = await suggestBroll(id);
+      setBrollEvents(p.brollEvents);
+      setBrollSuggested(true);
+      if (p.brollEvents.length && !settings?.brollEnabled) changeSettings({ brollEnabled: true });
+    } catch (e) {
+      setError(msg(e));
+    }
+  }
+
+  function addBroll(clipId: string) {
+    const clip = brollClips.find((c) => c.id === clipId);
+    if (!clip || !project) return;
+    const start = Math.round(currentSec * 100) / 100;
+    const end = Math.min(start + 2.5, project.durationSec, start + clip.durationSec);
+    persistBroll([...brollEvents, { id: Math.random().toString(36).slice(2, 10), startSec: start, endSec: Math.round(end * 100) / 100, clipId }]);
+  }
 
   async function doHighlightHook() {
     try {
@@ -309,7 +347,7 @@ export function EditorWorkspace({ id }: { id: string }) {
   const preview = (
     <VideoPreview
       project={project} settings={settings} captions={captions} showSafeZone={showSafeZone}
-      zoomPlan={insights.zoomPlan} sfxEvents={sfxEvents} logoUrl={logoUrl} videoRef={videoRef} currentSec={currentSec} onTime={setCurrentSec}
+      zoomPlan={insights.zoomPlan} sfxEvents={sfxEvents} brollEvents={brollEvents} logoUrl={logoUrl} videoRef={videoRef} currentSec={currentSec} onTime={setCurrentSec}
     />
   );
 
@@ -364,8 +402,15 @@ export function EditorWorkspace({ id }: { id: string }) {
           </div>
         </div>
         <Timeline
-          durationSec={project.durationSec} captions={captions} silences={project.silences} zoomPlan={insights.zoomPlan} sfxEvents={sfxEvents} settings={settings}
+          durationSec={project.durationSec} captions={captions} silences={project.silences} zoomPlan={insights.zoomPlan} sfxEvents={sfxEvents} brollEvents={brollEvents} settings={settings}
           selectedId={selectedId} currentSec={currentSec} onSelect={select} onSeek={seek}
+        />
+        <BrollCard
+          enabled={settings.brollEnabled} events={brollEvents} clips={brollClips} currentSec={currentSec}
+          durationSec={project.durationSec} suggested={brollSuggested}
+          onToggle={(v) => changeSettings({ brollEnabled: v })} onSuggest={doSuggestBroll} onAdd={addBroll} onSeek={seek}
+          onChange={(evId, patch) => persistBroll(brollEvents.map((e) => (e.id === evId ? { ...e, ...patch } : e)))}
+          onRemove={(evId) => persistBroll(brollEvents.filter((e) => e.id !== evId))}
         />
         <SfxCard
           enabled={settings.sfxEnabled} gainDb={settings.sfxGainDb} events={sfxEvents} sounds={sfxSounds} currentSec={currentSec}

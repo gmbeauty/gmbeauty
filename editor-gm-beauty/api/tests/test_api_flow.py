@@ -283,3 +283,73 @@ def test_old_database_gets_new_columns(tmp_path):
     finally:
         dbmod.engine = old
     assert {"sfx_events", "settings", "captions"} <= cols
+
+
+def _make_color_clip(path, color="red", size="1080x1920", seconds=3):
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", f"color=c={color}:s={size}:r=30:d={seconds}", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(path)],
+        check=True,
+    )
+
+
+def _pixel(path, at):
+    """Cor média (R, G, B) do quadro em `at` segundos."""
+    raw = subprocess.run(
+        ["ffmpeg", "-v", "error", "-ss", str(at), "-i", str(path), "-frames:v", "1", "-vf", "crop=400:400:340:760,scale=1:1,format=rgb24", "-f", "rawvideo", "-"],
+        capture_output=True, check=True,
+    ).stdout
+    return tuple(raw[:3])
+
+
+def test_broll_library_suggestion_and_render(client, landscape_video, tmp_path):
+    clip = tmp_path / "ruby.mp4"
+    _make_color_clip(clip)
+    with open(clip, "rb") as f:
+        r = client.post("/library/broll", files={"file": ("ruby.mp4", f, "video/mp4")}, data={"name": "Close", "tag": "acabamento natural"})
+    assert r.status_code == 201, r.text
+    c = r.json()
+    assert c["tag"] == "acabamento natural" and c["durationSec"] > 2.5 and (c["width"], c["height"]) == (1080, 1920)
+    assert client.get(f"/library/broll/{c['id']}/thumbnail").status_code == 200
+    assert client.get(f"/library/broll/{c['id']}/video").status_code == 200
+    assert client.patch(f"/library/broll/{c['id']}", json={"tag": "acabamento natural, natural"}).json()["tag"].endswith("natural")
+    assert client.post("/library/broll", files={"file": ("a.txt", b"x", "text/plain")}, data={}).status_code == 400
+    bad = tmp_path / "falso.mp4"
+    bad.write_text("não é vídeo")
+    r = client.post("/library/broll", files={"file": ("falso.mp4", open(bad, "rb"), "video/mp4")}, data={})
+    assert r.status_code == 400 and "ffmpeg" not in r.json()["detail"].lower()
+
+    pid = upload(client, landscape_video).json()["id"]
+    empty = client.post(f"/projects/{pid}/broll/suggest")  # sem legendas ainda: nada foi citado, então nada é sugerido
+    assert empty.status_code == 200 and empty.json()["brollEvents"] == []
+    client.post(f"/projects/{pid}/analyze")
+    wait(client, pid)
+    sug = client.post(f"/projects/{pid}/broll/suggest").json()["brollEvents"]
+    # "Acabamento natural." é falado em 6,8 s
+    assert len(sug) == 1 and abs(sug[0]["startSec"] - 6.8) < 0.05 and sug[0]["clipId"] == c["id"]
+
+    # PUT: encurta, rejeita clipe inexistente e limita ao tamanho do clipe
+    ev = [dict(sug[0], endSec=60.0), {"id": "x", "startSec": 1, "endSec": 2, "clipId": "naoexiste"}]
+    saved = client.put(f"/projects/{pid}/broll", json={"events": ev}).json()["brollEvents"]
+    assert len(saved) == 1 and saved[0]["endSec"] <= sug[0]["startSec"] + c["durationSec"] + 0.01
+    client.put(f"/projects/{pid}/broll", json={"events": [dict(sug[0], endSec=sug[0]["startSec"] + 2.0)]})
+
+    outs = {}
+    for name, on in (("sem", False), ("com", True)):
+        client.patch(f"/projects/{pid}", json={"settings": {"brollEnabled": on, "zoomMode": "off", "captionMode": "traditional"}})
+        client.post(f"/projects/{pid}/export")
+        p = wait(client, pid)
+        assert p["status"] == "ready", p["errorMessage"]
+        outs[name] = tmp_path / f"{name}.mp4"
+        outs[name].write_bytes(client.get(f"/projects/{pid}/download").content)
+    r, g, b = _pixel(outs["com"], 7.5)
+    assert r > 200 and g < 60 and b < 60, (r, g, b)  # no B-roll: o clipe vermelho cobre a imagem
+    r2, g2, _ = _pixel(outs["com"], 3.0)
+    assert not (r2 > 200 and g2 < 60)  # fora do B-roll: vídeo normal
+    assert not (_pixel(outs["sem"], 7.5)[0] > 200 and _pixel(outs["sem"], 7.5)[1] < 60)  # desligado: sem B-roll
+    assert abs(float(ffprobe(outs["com"])["format"]["duration"]) - float(ffprobe(outs["sem"])["format"]["duration"])) < 0.2
+
+    # apagar o clipe da biblioteca o remove dos projetos
+    assert client.delete(f"/library/broll/{c['id']}").status_code == 204
+    assert client.get(f"/projects/{pid}").json()["brollEvents"] == []
+    assert client.get("/library/broll").json() == []
+    client.delete(f"/projects/{pid}")

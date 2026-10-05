@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { sfxAudioUrl, urls } from "@/lib/api";
+import { brollVideoUrl, sfxAudioUrl, urls } from "@/lib/api";
 import { activeWordIndex, cleanWord, FONT_PX, GM_COLORS, MAX_CHARS, OUTLINE_FOR, wrapLines } from "@/lib/captions";
 import { allCuts } from "@/lib/cuts";
 import { formatDuration } from "@/lib/format";
 import { SAFE_ZONE } from "@/lib/safe-zone";
 import { zoomAt } from "@/lib/zoom";
-import type { CaptionSegment, Project, RenderSettings, SfxEvent, ZoomEvent } from "@/lib/types";
+import type { CaptionSegment, BrollEvent, Project, RenderSettings, SfxEvent, ZoomEvent } from "@/lib/types";
 
 export function VideoPreview({
   project,
@@ -16,6 +16,7 @@ export function VideoPreview({
   showSafeZone,
   zoomPlan,
   sfxEvents,
+  brollEvents,
   logoUrl,
   videoRef,
   currentSec,
@@ -27,6 +28,7 @@ export function VideoPreview({
   showSafeZone: boolean;
   zoomPlan: ZoomEvent[];
   sfxEvents: SfxEvent[];
+  brollEvents: BrollEvent[];
   logoUrl: string | null;
   videoRef: React.RefObject<HTMLVideoElement | null>;
   currentSec: number;
@@ -74,6 +76,7 @@ export function VideoPreview({
     return () => cancelAnimationFrame(raf);
   }, [playing, videoRef, onTime]);
 
+  const activeBroll = settings.brollEnabled ? brollEvents.find((e) => currentSec >= e.startSec && currentSec < e.endSec) : undefined;
   const active = captions.find((c) => currentSec >= c.startSec && currentSec < c.endSec);
   const toggle = () => {
     const v = videoRef.current;
@@ -103,6 +106,8 @@ export function VideoPreview({
           className="absolute inset-0 h-full w-full cursor-pointer object-contain"
           style={{ transform: `scale(${zoomAt(zoomPlan, currentSec)})` }}
         />
+
+        {activeBroll && <BrollLayer key={activeBroll.id} event={activeBroll} currentSec={currentSec} playing={playing} />}
 
         {showSafeZone && (
           <div aria-hidden className="pointer-events-none absolute inset-0">
@@ -203,5 +208,37 @@ function CaptionOverlay({ caption, settings, t }: { caption: CaptionSegment; set
         </div>
       ))}
     </div>
+  );
+}
+
+// B-roll na prévia: cobre a imagem enquanto a fala continua (o áudio do clipe fica mudo).
+function BrollLayer({ event, currentSec, playing }: { event: BrollEvent; currentSec: number; playing: boolean }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const offset = Math.max(0, currentSec - event.startSec);
+
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    if (playing) v.play().catch(() => {});
+    else v.pause();
+  }, [playing]);
+
+  useEffect(() => {
+    const v = ref.current;
+    if (v && !playing && Math.abs(v.currentTime - offset) > 0.05) v.currentTime = offset;
+  }, [offset, playing]);
+
+  return (
+    <video
+      ref={ref}
+      src={brollVideoUrl(event.clipId)}
+      muted
+      playsInline
+      autoPlay={playing}
+      onLoadedMetadata={(e) => {
+        e.currentTarget.currentTime = offset;
+      }}
+      className="pointer-events-none absolute inset-0 h-full w-full bg-gm-ink object-contain"
+    />
   );
 }

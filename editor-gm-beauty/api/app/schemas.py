@@ -33,6 +33,7 @@ class RenderSettings(CamelModel):
     zoom_mode: ZoomMode = "off"
     sfx_enabled: bool = False
     sfx_gain_db: float = Field(-14.0, ge=-30.0, le=-4.0)  # volume do efeito sobre a fala
+    broll_enabled: bool = False
     logo_position: LogoPosition = "none"
     logo_size_pct: int = Field(22, ge=8, le=50)
     logo_opacity: float = Field(0.9, ge=0.1, le=1.0)
@@ -57,6 +58,32 @@ class SfxSoundOut(CamelModel):
 
 class SfxEventsIn(CamelModel):
     events: list[SfxEvent]
+
+
+class BrollEvent(CamelModel):
+    id: str
+    start_sec: float = Field(ge=0)  # no tempo do vídeo ORIGINAL
+    end_sec: float = Field(ge=0)
+    clip_id: str
+
+
+class BrollClipOut(CamelModel):
+    id: str
+    name: str
+    tag: str
+    duration_sec: float
+    width: int
+    height: int
+    created_at: datetime
+
+
+class BrollClipPatch(CamelModel):
+    name: str | None = None
+    tag: str | None = None
+
+
+class BrollEventsIn(CamelModel):
+    events: list[BrollEvent]
 
 
 class Word(CamelModel):
@@ -97,6 +124,7 @@ class ProjectOut(CamelModel):
     captions: list[Caption]
     silences: list[Silence]
     sfx_events: list[SfxEvent]
+    broll_events: list[BrollEvent]
     analyzed: bool
     has_output: bool
     error_message: str | None
