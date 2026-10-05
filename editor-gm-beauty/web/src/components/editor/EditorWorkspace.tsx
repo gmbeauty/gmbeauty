@@ -6,12 +6,13 @@ import { CaptionList } from "./CaptionList";
 import { SidePanel } from "./SidePanel";
 import { Timeline } from "./Timeline";
 import { VideoPreview } from "./VideoPreview";
+import { HookCard } from "./HookCard";
 import {
-  analyzeProject, applyHighlightStrategy, exportProject, getProject, hasLogo as fetchHasLogo,
-  patchProject, removeLogo, saveCaptions, uploadLogo, urls,
+  analyzeProject, applyHighlightStrategy, exportProject, getInsights, getProject, hasLogo as fetchHasLogo,
+  highlightHook, patchProject, removeLogo, saveCaptions, uploadLogo, urls,
 } from "@/lib/api";
 import { settingsForPreset } from "@/lib/presets";
-import type { CaptionSegment, ContentTypeId, Project, RenderSettings, StylePresetId } from "@/lib/types";
+import type { CaptionSegment, ContentTypeId, Insights, Project, RenderSettings, StylePresetId } from "@/lib/types";
 
 const STEPS: { stage: string; label: string }[] = [
   { stage: "audio", label: "Extraindo o áudio" },
@@ -26,6 +27,7 @@ export function EditorWorkspace({ id }: { id: string }) {
   const [project, setProject] = useState<Project | null>(null);
   const [settings, setSettings] = useState<RenderSettings | null>(null);
   const [captions, setCaptions] = useState<CaptionSegment[]>([]);
+  const [insights, setInsights] = useState<Insights>({ zoomPlan: [], hook: null });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [currentSec, setCurrentSec] = useState(0);
   const [showSafeZone, setShowSafeZone] = useState(true);
@@ -45,6 +47,15 @@ export function EditorWorkspace({ id }: { id: string }) {
   const setDirty = useRef(false);
   const prevStage = useRef<string | null>(null);
 
+  // Plano de zoom e análise do gancho (calculados no servidor a partir das legendas e configurações salvas).
+  const refreshInsights = useCallback(async () => {
+    try {
+      setInsights(await getInsights(id));
+    } catch {
+      /* é só um complemento; o editor continua funcionando */
+    }
+  }, [id]);
+
   // ---------- carregar ----------
   useEffect(() => {
     let cancelled = false;
@@ -57,6 +68,7 @@ export function EditorWorkspace({ id }: { id: string }) {
         setCaptions(p.captions);
         setSelectedId(p.captions[0]?.id ?? null);
         setLogoVersion(logo ? Date.now() : null);
+        if (p.analyzed) setInsights(await getInsights(id));
       } catch (e) {
         if (!cancelled) setError(msg(e));
       }
@@ -76,6 +88,7 @@ export function EditorWorkspace({ id }: { id: string }) {
           setCaptions(p.captions);
           setSettings(p.settings);
           setSelectedId(p.captions[0]?.id ?? null);
+          refreshInsights();
         }
         prevStage.current = p.status === "processing" ? p.stage : null;
         setProject(p);
@@ -84,7 +97,7 @@ export function EditorWorkspace({ id }: { id: string }) {
       }
     }, 1500);
     return () => clearInterval(t);
-  }, [processing, id]);
+  }, [processing, id, refreshInsights]);
   useEffect(() => { if (project?.status === "processing") prevStage.current = project.stage; }, [project?.status, project?.stage]);
 
   // ---------- salvar automaticamente ----------
@@ -96,13 +109,14 @@ export function EditorWorkspace({ id }: { id: string }) {
       await saveCaptions(id, latestCaptions.current);
       setSaveState("saved");
       setError(null);
+      refreshInsights();
     } catch (e) {
       capDirty.current = true;
       setSaveState("error");
       setError(msg(e));
       throw e;
     }
-  }, [id]);
+  }, [id, refreshInsights]);
 
   const flushSettings = useCallback(async () => {
     clearTimeout(setTimer.current);
@@ -110,12 +124,13 @@ export function EditorWorkspace({ id }: { id: string }) {
     setDirty.current = false;
     try {
       await patchProject(id, { settings: latestSettings.current });
+      refreshInsights();
     } catch (e) {
       setDirty.current = true;
       setError(msg(e));
       throw e;
     }
-  }, [id]);
+  }, [id, refreshInsights]);
 
   function changeCaption(capId: string, patch: Partial<CaptionSegment>) {
     setCaptions((cs) => cs.map((c) => (c.id === capId ? { ...c, ...patch } : c)));
@@ -131,6 +146,18 @@ export function EditorWorkspace({ id }: { id: string }) {
       const p = await applyHighlightStrategy(id, strategy);
       setCaptions(p.captions);
       setProject((cur) => (cur ? { ...cur, status: p.status } : cur));
+      refreshInsights();
+    } catch (e) {
+      setError(msg(e));
+    }
+  }
+
+  async function doHighlightHook() {
+    try {
+      await flushCaptions();
+      const p = await highlightHook(id);
+      setCaptions(p.captions);
+      refreshInsights();
     } catch (e) {
       setError(msg(e));
     }
@@ -248,7 +275,7 @@ export function EditorWorkspace({ id }: { id: string }) {
   const preview = (
     <VideoPreview
       project={project} settings={settings} captions={captions} showSafeZone={showSafeZone}
-      logoUrl={logoUrl} videoRef={videoRef} currentSec={currentSec} onTime={setCurrentSec}
+      zoomPlan={insights.zoomPlan} logoUrl={logoUrl} videoRef={videoRef} currentSec={currentSec} onTime={setCurrentSec}
     />
   );
 
@@ -303,9 +330,12 @@ export function EditorWorkspace({ id }: { id: string }) {
           </div>
         </div>
         <Timeline
-          durationSec={project.durationSec} captions={captions} silences={project.silences} settings={settings}
+          durationSec={project.durationSec} captions={captions} silences={project.silences} zoomPlan={insights.zoomPlan} settings={settings}
           selectedId={selectedId} currentSec={currentSec} onSelect={select} onSeek={seek}
         />
+        {insights.hook && (
+          <HookCard hook={insights.hook} trimStartSec={settings.trimStartSec} onTrimStart={(sec) => changeSettings({ trimStartSec: sec })} onHighlightHook={doHighlightHook} />
+        )}
       </div>
 
       <div className="space-y-4">

@@ -13,6 +13,7 @@ Position = Literal["top", "middle", "bottom"]
 Color = Literal["white", "lilac", "purple"]
 LogoPosition = Literal["none", "top", "bottom", "watermark"]
 HighlightStrategy = Literal["none", "keywords", "offer"]
+ZoomMode = Literal["off", "subtle", "dynamic"]
 
 
 class CamelModel(BaseModel):
@@ -28,6 +29,8 @@ class RenderSettings(CamelModel):
     highlight_strategy: HighlightStrategy = "none"
     remove_silences: bool = False
     silence_min_sec: float = Field(0.6, ge=0.3, le=3.0)
+    trim_start_sec: float = Field(0.0, ge=0.0, le=10.0)  # corta o silêncio antes da 1ª fala
+    zoom_mode: ZoomMode = "off"
     logo_position: LogoPosition = "none"
     logo_size_pct: int = Field(22, ge=8, le=50)
     logo_opacity: float = Field(0.9, ge=0.1, le=1.0)
@@ -94,3 +97,30 @@ class HighlightsIn(CamelModel):
 
 class DictionaryIn(CamelModel):
     term: str = Field(min_length=1, max_length=80)
+
+
+class ZoomEventOut(CamelModel):
+    start_sec: float
+    end_sec: float
+    amp: float
+    kind: Literal["in", "settle"]
+
+
+class HookCheck(CamelModel):
+    id: str
+    ok: bool
+    label: str
+    tip: str | None = None
+    action: Literal["trim_start", "highlight_hook"] | None = None
+
+
+class HookOut(CamelModel):
+    level: Literal["strong", "good", "weak"]
+    first_speech_sec: float | None
+    suggested_trim_sec: float | None
+    checks: list[HookCheck]
+
+
+class InsightsOut(CamelModel):
+    zoom_plan: list[ZoomEventOut]
+    hook: HookOut | None

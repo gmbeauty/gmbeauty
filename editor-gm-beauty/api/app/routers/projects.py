@@ -13,15 +13,17 @@ from .. import config, jobs, storage
 from ..db import DictionaryTerm, Project, _new_id, get_db
 from ..errors import ProcessingError, logger
 from ..schemas import (
+    Caption,
     CaptionsIn,
     DictionaryIn,
     HighlightsIn,
+    InsightsOut,
     ProjectOut,
     ProjectPatch,
     RenderSettings,
 )
 from ..services import captions as captions_svc
-from ..services import ffmpeg
+from ..services import ffmpeg, hook, zoom
 
 router = APIRouter()
 ALLOWED_EXT = {".mp4", ".mov"}
@@ -246,6 +248,37 @@ def set_highlights(project_id: str, body: HighlightsIn, db: Session = Depends(ge
     settings = RenderSettings(**(p.settings or {}))
     settings.highlight_strategy = body.strategy
     p.settings = settings.model_dump(by_alias=False)
+    if p.status == "ready":
+        p.status = "draft"
+    db.commit()
+    return _out(p)
+
+
+# ---------- zoom (Fase 9) e gancho (Fase 10) ----------
+
+@router.get("/projects/{project_id}/insights", response_model=InsightsOut, response_model_by_alias=True)
+def insights(project_id: str, db: Session = Depends(get_db)):
+    """Plano de zooms (usado na prévia e na exportação) e análise do gancho."""
+    p = _get(db, project_id)
+    settings = RenderSettings(**(p.settings or {}))
+    caps = [Caption(**c) for c in p.captions]
+    events = zoom.plan_zoom(caps, p.duration_sec, settings.zoom_mode)
+    return {
+        "zoom_plan": [{"start_sec": e.start, "end_sec": e.end, "amp": e.amp, "kind": e.kind} for e in events],
+        "hook": hook.analyze_hook(caps, settings),
+    }
+
+
+@router.post("/projects/{project_id}/hook/highlight", response_model=ProjectOut, response_model_by_alias=True)
+def highlight_hook(project_id: str, db: Session = Depends(get_db)):
+    """Destaca a palavra mais forte da primeira fala."""
+    p = _get(db, project_id)
+    caps = json.loads(json.dumps(p.captions))
+    first = min(caps, key=lambda c: c["startSec"], default=None)
+    if first is None:
+        raise HTTPException(400, "Ainda não há legendas para destacar.")
+    first["highlightWords"] = hook.suggest_hook_highlight(first["text"])
+    p.captions = caps
     if p.status == "ready":
         p.status = "draft"
     db.commit()

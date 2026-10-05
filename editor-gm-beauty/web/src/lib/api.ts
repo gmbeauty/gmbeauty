@@ -1,5 +1,5 @@
 // Único ponto de comunicação com o backend (FastAPI).
-import type { CaptionSegment, HighlightStrategy, Project, RenderSettings } from "./types";
+import type { CaptionSegment, HighlightStrategy, Insights, Project, RenderSettings } from "./types";
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -56,6 +56,9 @@ export const saveCaptions = (id: string, captions: CaptionSegment[]) =>
 
 export const applyHighlightStrategy = (id: string, strategy: HighlightStrategy) =>
   request<Project>(`/projects/${id}/highlights`, json("POST", { strategy }));
+
+export const getInsights = (id: string) => request<Insights>(`/projects/${id}/insights`);
+export const highlightHook = (id: string) => request<Project>(`/projects/${id}/hook/highlight`, { method: "POST" });
 
 export async function hasLogo(): Promise<boolean> {
   try {

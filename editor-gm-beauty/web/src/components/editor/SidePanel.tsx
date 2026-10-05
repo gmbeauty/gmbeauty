@@ -71,6 +71,15 @@ export function SidePanel({
         <p className="mt-1 text-xs text-gm-muted">Só usa palavras que estão na fala. Substitui os destaques atuais.</p>
       </Field>
 
+      <Field label="Zoom automático">
+        <Segmented
+          value={settings.zoomMode}
+          onChange={(v) => onSettings({ zoomMode: v })}
+          options={[{ value: "off", label: "Desligado" }, { value: "subtle", label: "Sutil" }, { value: "dynamic", label: "Dinâmico" }]}
+        />
+        <p className="mt-1 text-xs text-gm-muted">Aproximações leves e espaçadas (até 5% no sutil, 9% no dinâmico). Não mexe na logo nem nas legendas.</p>
+      </Field>
+
       <Field label="Cor do texto">
         <Colors value={settings.textColor} onChange={(v) => onSettings({ textColor: v })} />
       </Field>

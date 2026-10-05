@@ -71,9 +71,12 @@ Frontend: Next.js, React, TypeScript, Tailwind CSS. Backend: FastAPI, SQLAlchemy
 - **Fase 7 (estilos):** cada estilo é um conjunto de configurações em `web/src/lib/presets.ts` (sem lógica duplicada no servidor).
 - **Fase 8 (exportação):** MP4 H.264 CRF 18, AAC 192k, 1080×1920; vídeos não verticais ganham fundo desfocado (nada é cortado, o produto fica inteiro).
 
-## Preparado para as próximas fases
+- **Fase 9 (zoom):** `services/zoom.py` planeja os zooms sobre as legendas (intervalo mínimo de 6 s no sutil e 3,5 s no dinâmico, movimento suave, só no centro). `GET /projects/<id>/insights` entrega o plano; a prévia aplica a mesma curva (`web/src/lib/zoom.ts`) e o `render.py` converte o plano em uma expressão do FFmpeg (`scale` com `eval=frame` + `crop`), depois do enquadramento e antes de logo/legenda. O plano é remapeado quando há cortes.
+- **Fase 10 (gancho):** `services/hook.py` faz 4 checagens simples nos primeiros 3 s (início rápido, abertura que chama a pessoa, 1ª legenda curta, destaque). "Cortar início" vira o ajuste `trimStartSec`, aplicado como um corte a mais no mesmo mecanismo dos silêncios.
 
-O render monta um grafo de filtros em etapas (`render.py`); zoom (Fase 9) entra como mais uma etapa antes do enquadramento, usando os mesmos tempos já mapeados. Remotion continua adiado.
+## Para as Fases 11–14
+
+O render é um grafo de filtros em etapas (`render.py`); B-roll entra como mais uma etapa de vídeo e efeitos sonoros/música como uma etapa de mistura de áudio. Cada uma exige decisões suas antes (origem e licença dos arquivos de som, música e B-roll; uso de IA paga na Fase 14). Remotion continua adiado.
 
 ## Antes de colocar online
 

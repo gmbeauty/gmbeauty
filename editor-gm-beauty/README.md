@@ -4,7 +4,7 @@ Transforme vídeos brutos em conteúdo pronto para postar.
 
 Fluxo: **upload → escolher tipo e estilo → edição automática → revisar → exportar** (MP4 H.264, 1080×1920, 9:16).
 
-## O que já funciona (Fases 1–8)
+## O que já funciona (Fases 1–10)
 
 - Dashboard com projetos (miniatura, status, duplicar, excluir permanente).
 - Upload de MP4/MOV com barra de progresso.
@@ -15,6 +15,8 @@ Fluxo: **upload → escolher tipo e estilo → edição automática → revisar 
 - Estilos GM Clean, GM Viral, GM Produto e GM Oferta.
 - Logo opcional (posição, tamanho e transparência).
 - Exportação 9:16 e download.
+- **Zoom automático** (Desligado / Sutil / Dinâmico): aproximações suaves e espaçadas, até 5% (sutil) ou 9% (dinâmico), sem mexer em logo e legendas. GM Produto vem com zoom desligado para o produto ficar inteiro e parado.
+- **Análise do gancho** dos primeiros 3 s: checa início rápido, abertura que chama a pessoa, legenda curta e destaque; oferece cortar o silêncio inicial e destacar a palavra do gancho. É uma checagem por regras sobre a transcrição (não é IA).
 
 ## O que você precisa instalar
 
@@ -63,5 +65,7 @@ cd web && npm run lint && npm run build
 - **Sem login:** o app assume um único usuário rodando no próprio computador. Antes de colocar online é obrigatório adicionar login (ver `ARCHITECTURE.md`).
 - Valores da zona segura são aproximados; ajuste em `web/src/lib/safe-zone.ts` e `api/app/services/ass.py` (mantenha os dois iguais).
 - Fonte das legendas é definida no servidor; ainda não há escolha de fonte na tela.
+
+Ainda não feitas: B-roll, efeitos sonoros, música automática e IA analisando roteiro e retenção (Fases 11–14), que dependem de decisões de produto.
 
 Veja `ARCHITECTURE.md` para as decisões técnicas.

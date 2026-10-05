@@ -19,3 +19,9 @@ export function cutRanges(silences: SilenceRange[], minSec: number): [number, nu
 export function removedSeconds(cuts: [number, number][]): number {
   return cuts.reduce((acc, [a, b]) => acc + (b - a), 0);
 }
+
+/** Todos os trechos que serão removidos: início silencioso + pausas (se ligado). */
+export function allCuts(silences: SilenceRange[], s: { removeSilences: boolean; silenceMinSec: number; trimStartSec: number }): [number, number][] {
+  const cuts = s.removeSilences ? cutRanges(silences, s.silenceMinSec) : [];
+  return s.trimStartSec > 0 ? [[0, s.trimStartSec], ...cuts] : cuts;
+}

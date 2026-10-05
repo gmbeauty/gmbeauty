@@ -143,3 +143,53 @@ def test_render_failure_shows_simple_message_and_logs_detail(client, landscape_v
     with SessionLocal() as db:
         assert "ffmpeg exit" in db.get(Project, pid).error_detail  # detalhe técnico só no banco/log
     client.delete(f"/projects/{pid}")
+
+
+def test_zoom_and_trim_start_export(client, landscape_video, tmp_path):
+    pid = upload(client, landscape_video).json()["id"]
+    client.post(f"/projects/{pid}/analyze")
+    wait(client, pid)
+
+    # análise do gancho: a fala só começa em 0,1 s, então o início está ok
+    ins = client.get(f"/projects/{pid}/insights").json()
+    assert ins["zoomPlan"] == [] and ins["hook"]["checks"][0]["ok"]
+
+    client.patch(f"/projects/{pid}", json={"settings": {"zoomMode": "dynamic"}})
+    plan = client.get(f"/projects/{pid}/insights").json()["zoomPlan"]
+    assert plan and plan[0]["kind"] == "settle" and plan[0]["startSec"] == 0
+
+    r = client.post(f"/projects/{pid}/hook/highlight").json()
+    assert r["captions"][0]["highlightWords"]  # palavra do gancho destacada
+
+    # exporta com zoom + corte do início (sem remover silêncios)
+    client.patch(f"/projects/{pid}", json={"settings": {"zoomMode": "dynamic", "trimStartSec": 3.0, "captionMode": "highlight"}})
+    client.post(f"/projects/{pid}/export")
+    p = wait(client, pid)
+    assert p["status"] == "ready", p["errorMessage"]
+    out = tmp_path / "zoom.mp4"
+    out.write_bytes(client.get(f"/projects/{pid}/download").content)
+    info = ffprobe(out)
+    v = next(s for s in info["streams"] if s["codec_type"] == "video")
+    assert (v["width"], v["height"]) == (1080, 1920)
+    assert 6.5 < float(info["format"]["duration"]) < 7.5  # 10 s - 3 s cortados do início
+
+    # o zoom realmente muda a imagem: compara com a mesma exportação sem zoom
+    client.patch(f"/projects/{pid}", json={"settings": {"zoomMode": "off", "trimStartSec": 3.0, "captionMode": "highlight"}})
+    client.post(f"/projects/{pid}/export")
+    wait(client, pid)
+    plain = tmp_path / "plain.mp4"
+    plain.write_bytes(client.get(f"/projects/{pid}/download").content)
+    assert _frame_diff(out, plain, at=4.8) > 0.5  # pico do zoom (6,8 s original - 3 s cortados + 1 s)
+    assert _frame_diff(out, plain, at=0.5) < 0.2  # fora do zoom as imagens são iguais
+    client.delete(f"/projects/{pid}")
+
+
+def _frame_diff(a, b, at):
+    """Diferença média (0-255) entre o mesmo quadro de dois vídeos."""
+    def frame(path):
+        return subprocess.run(
+            ["ffmpeg", "-v", "error", "-ss", str(at), "-i", str(path), "-frames:v", "1", "-vf", "scale=108:192,format=gray", "-f", "rawvideo", "-"],
+            capture_output=True, check=True,
+        ).stdout
+    fa, fb = frame(a), frame(b)
+    return sum(abs(x - y) for x, y in zip(fa, fb)) / len(fa)

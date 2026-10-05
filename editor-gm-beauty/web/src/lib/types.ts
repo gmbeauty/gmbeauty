@@ -10,6 +10,7 @@ export type CaptionPosition = "top" | "middle" | "bottom";
 export type GmColor = "white" | "lilac" | "purple";
 export type LogoPosition = "none" | "top" | "bottom" | "watermark";
 export type HighlightStrategy = "none" | "keywords" | "offer";
+export type ZoomMode = "off" | "subtle" | "dynamic";
 
 // Tudo o que o painel lateral controla e vai para a renderização.
 export interface RenderSettings {
@@ -21,6 +22,8 @@ export interface RenderSettings {
   highlightStrategy: HighlightStrategy;
   removeSilences: boolean;
   silenceMinSec: number;
+  trimStartSec: number; // corta o silêncio antes da primeira fala
+  zoomMode: ZoomMode;
   logoPosition: LogoPosition;
   logoSizePct: number;
   logoOpacity: number;
@@ -68,4 +71,31 @@ export interface Project {
   errorMessage: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ZoomEvent {
+  startSec: number;
+  endSec: number;
+  amp: number;
+  kind: "in" | "settle";
+}
+
+export interface HookCheck {
+  id: string;
+  ok: boolean;
+  label: string;
+  tip: string | null;
+  action: "trim_start" | "highlight_hook" | null;
+}
+
+export interface Hook {
+  level: "strong" | "good" | "weak";
+  firstSpeechSec: number | null;
+  suggestedTrimSec: number | null;
+  checks: HookCheck[];
+}
+
+export interface Insights {
+  zoomPlan: ZoomEvent[];
+  hook: Hook | null;
 }

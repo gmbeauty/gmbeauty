@@ -10,6 +10,7 @@ from ..errors import ProcessingError
 from ..schemas import Caption, RenderSettings
 from .ass import SAFE_BOTTOM_PCT, SAFE_LEFT_PCT, SAFE_TOP_PCT, build_ass
 from .cuts import TimeMap, cut_ranges, keep_ranges
+from .zoom import ffmpeg_zoom_expr, plan_zoom
 
 OUT_W, OUT_H = 1080, 1920
 
@@ -60,6 +61,8 @@ def render(
     on_progress: Callable[[float], None],
 ) -> None:
     cuts = cut_ranges(silences, settings.silence_min_sec) if settings.remove_silences else []
+    if settings.trim_start_sec > 0:  # corta o silêncio antes da primeira fala
+        cuts = [(0.0, min(settings.trim_start_sec, max(0.0, duration - 1.0)))] + cuts
     keeps = keep_ranges(duration, cuts)
     tmap = TimeMap(keeps)
     out_duration = tmap.total if cuts else duration
@@ -86,6 +89,13 @@ def render(
 
     stages.append(_fit_stage(src_w, src_h))
     last = "fit"
+    zoom = ffmpeg_zoom_expr(plan_zoom(captions, duration, settings.zoom_mode), tmap if cuts else None)
+    if zoom:  # zoom depois do enquadramento e antes de logo/legenda: eles ficam parados
+        stages.append(
+            f"[fit]scale=w='2*trunc({OUT_W}*({zoom})/2)':h='2*trunc({OUT_H}*({zoom})/2)':eval=frame,"
+            f"crop={OUT_W}:{OUT_H},setsar=1[zoomed]"
+        )
+        last = "zoomed"
     if settings.logo_position != "none" and logo:
         f, last = _logo_stage(settings, last)
         stages.append(f)

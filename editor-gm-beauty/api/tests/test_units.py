@@ -70,3 +70,63 @@ def test_wrap_balances_lines():
 
     lines = _wrap(["Então", "olha", "R$", "29,90"], 16)
     assert lines == [[0, 1], [2, 3]]  # e não [Então olha R$] + [29,90]
+
+
+# ---------- Fase 9: zoom ----------
+from app.services import zoom as zoom_svc  # noqa: E402
+from app.services.hook import analyze_hook  # noqa: E402
+
+
+def _caps(spec):
+    return [Caption(id=f"c{i}", start_sec=a, end_sec=b, text=t) for i, (a, b, t) in enumerate(spec)]
+
+
+def test_zoom_plan_is_sparse_and_gentle():
+    caps = _caps([(0.2 + i * 2.2, 2.0 + i * 2.2, "a b c") for i in range(14)])  # ~31 s de fala contínua
+    sub = zoom_svc.plan_zoom(caps, 32, "subtle")
+    dyn = zoom_svc.plan_zoom(caps, 32, "dynamic")
+    assert zoom_svc.plan_zoom(caps, 32, "off") == []
+    assert len(sub) < len(dyn)
+    for plan, gap in ((sub, 6.0), (dyn, 3.5)):
+        assert all(e.amp <= 0.09 for e in plan)
+        for a, b in zip(plan, plan[1:]):
+            assert b.start - a.end >= gap - 1e-9  # intervalo mínimo; nada sobreposto
+    assert dyn[0].kind == "settle" and dyn[0].start == 0  # abertura reforça o gancho
+
+
+def test_zoom_curve_is_smooth_and_bounded():
+    ev = [zoom_svc.ZoomEvent(2.0, 5.0, 0.08, "in")]
+    assert zoom_svc.zoom_at(ev, 1.0) == 1.0 and zoom_svc.zoom_at(ev, 6.0) == 1.0
+    assert abs(zoom_svc.zoom_at(ev, 3.5) - 1.08) < 1e-9
+    zs = [zoom_svc.zoom_at(ev, 2 + i * 0.05) for i in range(61)]
+    assert max(abs(b - a) for a, b in zip(zs, zs[1:])) < 0.01  # sem saltos
+    settle = [zoom_svc.ZoomEvent(0, 1.6, 0.09, "settle")]
+    assert abs(zoom_svc.zoom_at(settle, 0) - 1.09) < 1e-9 and zoom_svc.zoom_at(settle, 1.6) == 1.0
+
+
+def test_zoom_expr_follows_cuts():
+    tmap = TimeMap(keep_ranges(20, [(1.0, 3.0)]))
+    expr = zoom_svc.ffmpeg_zoom_expr([zoom_svc.ZoomEvent(5.0, 8.0, 0.05, "in")], tmap)
+    assert expr and "(t-3.000)" in expr  # 5 s original -> 3 s no vídeo cortado
+    assert zoom_svc.ffmpeg_zoom_expr([zoom_svc.ZoomEvent(1.2, 1.5, 0.05, "in")], tmap) is None  # dentro do corte
+
+
+# ---------- Fase 10: gancho ----------
+def test_hook_flags_slow_start_and_suggests_trim():
+    caps = _caps([(1.6, 3.0, "Então hoje vou mostrar uma base muito boa que eu testei bastante")])
+    h = analyze_hook(caps, RenderSettings())
+    by_id = {c["id"]: c for c in h["checks"]}
+    assert not by_id["fast_start"]["ok"] and by_id["fast_start"]["action"] == "trim_start"
+    assert h["suggestedTrimSec"] == 1.45
+    assert not by_id["short_first_caption"]["ok"]
+    assert h["level"] == "weak"
+    # depois de cortar o início, a checagem passa
+    assert {c["id"]: c for c in analyze_hook(caps, RenderSettings(trim_start_sec=1.45))["checks"]}["fast_start"]["ok"]
+
+
+def test_hook_strong_opening():
+    caps = _caps([(0.2, 2.0, "Você ainda aplica base assim?")])
+    caps[0].highlight_words = ["base"]
+    h = analyze_hook(caps, RenderSettings())
+    assert h["level"] == "strong" and all(c["ok"] for c in h["checks"])
+    assert analyze_hook([], RenderSettings()) is None

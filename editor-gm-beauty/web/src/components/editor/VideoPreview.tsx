@@ -3,16 +3,18 @@
 import { useEffect, useRef, useState } from "react";
 import { urls } from "@/lib/api";
 import { activeWordIndex, cleanWord, FONT_PX, GM_COLORS, MAX_CHARS, OUTLINE_FOR, wrapLines } from "@/lib/captions";
-import { cutRanges } from "@/lib/cuts";
+import { allCuts } from "@/lib/cuts";
 import { formatDuration } from "@/lib/format";
 import { SAFE_ZONE } from "@/lib/safe-zone";
-import type { CaptionSegment, Project, RenderSettings } from "@/lib/types";
+import { zoomAt } from "@/lib/zoom";
+import type { CaptionSegment, Project, RenderSettings, ZoomEvent } from "@/lib/types";
 
 export function VideoPreview({
   project,
   settings,
   captions,
   showSafeZone,
+  zoomPlan,
   logoUrl,
   videoRef,
   currentSec,
@@ -22,6 +24,7 @@ export function VideoPreview({
   settings: RenderSettings;
   captions: CaptionSegment[];
   showSafeZone: boolean;
+  zoomPlan: ZoomEvent[];
   logoUrl: string | null;
   videoRef: React.RefObject<HTMLVideoElement | null>;
   currentSec: number;
@@ -30,8 +33,8 @@ export function VideoPreview({
   const [playing, setPlaying] = useState(false);
   const cutsRef = useRef<[number, number][]>([]);
   useEffect(() => {
-    cutsRef.current = settings.removeSilences ? cutRanges(project.silences, settings.silenceMinSec) : [];
-  }, [settings.removeSilences, settings.silenceMinSec, project.silences]);
+    cutsRef.current = allCuts(project.silences, settings);
+  }, [settings, project.silences]);
 
   // Acompanha o vídeo quadro a quadro e, se "remover silêncios" estiver ligado,
   // pula os trechos que serão cortados (prévia fiel ao resultado).
@@ -75,6 +78,7 @@ export function VideoPreview({
           onPause={() => setPlaying(false)}
           onSeeked={(e) => onTime(e.currentTarget.currentTime)}
           className="absolute inset-0 h-full w-full cursor-pointer object-contain"
+          style={{ transform: `scale(${zoomAt(zoomPlan, currentSec)})` }}
         />
 
         {showSafeZone && (
