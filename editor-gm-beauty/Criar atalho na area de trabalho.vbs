@@ -7,6 +7,13 @@ Set fso = CreateObject("Scripting.FileSystemObject")
 base = fso.GetParentFolderName(WScript.ScriptFullName)
 desk = sh.SpecialFolders("Desktop")
 
+If Not fso.FileExists(base & "\iniciar.bat") Then
+  MsgBox "Este arquivo precisa ficar DENTRO da pasta do editor (a pasta 'editor-gm-beauty')," & vbCrLf & _
+         "junto dos arquivos 'iniciar', 'api' e 'web'." & vbCrLf & vbCrLf & _
+         "Copie este arquivo para la e abra de novo.", 48, "Editor GM Beauty"
+  WScript.Quit
+End If
+
 MakeLink desk & "\Editor GM Beauty.lnk", base & "\Editor GM Beauty.vbs", "Abrir o Editor GM Beauty"
 MakeLink desk & "\Parar Editor GM Beauty.lnk", base & "\Parar Editor GM Beauty.vbs", "Encerrar o Editor GM Beauty"
 
