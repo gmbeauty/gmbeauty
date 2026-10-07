@@ -43,6 +43,16 @@ Na primeira vez ele instala o que falta (alguns minutos, precisa de internet) e 
 
 > O iniciador de Mac/Linux foi testado. O `iniciar.bat` (Windows) foi escrito com cuidado, mas **não foi testado** em um Windows de verdade; se algo falhar, use os comandos manuais abaixo ou me avise com a mensagem que apareceu.
 
+**Atalho na área de trabalho (sem janelas pretas)**
+
+Depois que o `iniciar` funcionou uma vez, dê dois cliques em **`Criar atalho na area de trabalho`**. Ele cria na área de trabalho:
+- **Editor GM Beauty**, com o ícone da GM: abre o editor em segundo plano e o navegador em **http://localhost:3000**, sem janelas pretas;
+- **Parar Editor GM Beauty**: encerra o editor.
+
+Se o editor demorar a abrir ou não abrir, ele mostra um aviso e abre a pasta `api\storage\logs` com o registro. Mantenha a pasta `editor-gm-beauty` onde está (de preferência fora de uma pasta sincronizada pelo OneDrive); os atalhos apontam para ela. Se mover a pasta, rode o `Criar atalho na area de trabalho` de novo.
+
+> Estes scripts do Windows (`.vbs`) também **não foram testados** em um Windows de verdade.
+
 **4. Transcrição (escolha uma)**
 
 - **Gratuita (padrão):** nada a fazer. Na primeira transcrição o programa baixa o modelo Whisper (~500 MB), então a primeira vez demora.
