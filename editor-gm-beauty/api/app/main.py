@@ -1,19 +1,35 @@
-"""Backend do Editor GM Beauty.
+"""Backend do Editor GM Beauty (FastAPI)."""
+from contextlib import asynccontextmanager
 
-Fase 1: apenas um esqueleto com verificação de saúde. As rotas reais de
-projetos/upload entram na Fase 2; transcrição na Fase 3; render na Fase 5.
-"""
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="Editor GM Beauty API")
+from . import config, jobs
+from .db import init_db
+from .errors import setup_logging
+from .routers import library, projects
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    config.ensure_dirs()
+    setup_logging()
+    init_db()
+    jobs.recover_interrupted()
+    yield
+
+
+app = FastAPI(title="Editor GM Beauty API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # o frontend local
+    allow_origins=config.CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(projects.router)
+app.include_router(library.router)
 
 
 @app.get("/health")
