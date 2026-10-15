@@ -1,0 +1,4 @@
+*.bat -text
+*.vbs -text
+*.ico binary
+*.command text eol=lf

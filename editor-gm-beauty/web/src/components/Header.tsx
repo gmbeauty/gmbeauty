@@ -10,7 +10,10 @@ export function Header({ children }: { children?: React.ReactNode }) {
           </span>
           <span className="text-lg font-semibold tracking-tight text-gm-purple">GM Beauty</span>
         </Link>
-        <div className="flex items-center gap-3">{children}</div>
+        <div className="flex items-center gap-3">
+          <Link href="/biblioteca" className="text-sm text-gm-muted hover:text-gm-purple">Biblioteca</Link>
+          {children}
+        </div>
       </div>
     </header>
   );

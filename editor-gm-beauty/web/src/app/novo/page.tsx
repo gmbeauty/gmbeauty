@@ -7,8 +7,9 @@ import { Header } from "@/components/Header";
 import { Button } from "@/components/Button";
 import { OptionCard } from "@/components/OptionCard";
 import { UploadDropzone, type VideoInfo } from "@/components/UploadDropzone";
+import { analyzeProject, createProject } from "@/lib/api";
 import { CONTENT_TYPES } from "@/lib/content-types";
-import { STYLE_PRESETS } from "@/lib/presets";
+import { STYLE_PRESETS, SUGGESTED_STYLE, settingsForPreset } from "@/lib/presets";
 import type { ContentTypeId, StylePresetId } from "@/lib/types";
 
 export default function NewVideoPage() {
@@ -16,13 +17,32 @@ export default function NewVideoPage() {
   const [info, setInfo] = useState<VideoInfo | null>(null);
   const [contentType, setContentType] = useState<ContentTypeId | null>(null);
   const [style, setStyle] = useState<StylePresetId | null>(null);
+  const [uploadPct, setUploadPct] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const ready = info && contentType && style;
+  const ready = info && contentType && style && uploadPct === null;
 
-  function start() {
-    // Fase 1: abre o editor de demonstração. Na Fase 2 isto cria o projeto
-    // de verdade e envia o vídeo ao servidor.
-    router.push(`/editor/demo-1?tipo=${contentType}&estilo=${style}`);
+  function pickType(id: ContentTypeId) {
+    setContentType(id);
+    setStyle((current) => current ?? SUGGESTED_STYLE[id]); // sugestão; dá para trocar
+  }
+
+  async function start() {
+    if (!info || !contentType || !style) return;
+    setError(null);
+    setUploadPct(0);
+    try {
+      const project = await createProject(
+        info.file,
+        { contentType, style, settings: settingsForPreset(style) },
+        setUploadPct,
+      );
+      await analyzeProject(project.id); // edição automática começa já
+      router.push(`/editor/${project.id}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Algo deu errado. Tente novamente.");
+      setUploadPct(null);
+    }
   }
 
   return (
@@ -41,7 +61,7 @@ export default function NewVideoPage() {
             <h2 className="mb-1 text-xl font-semibold text-gm-purple">Que tipo de vídeo você está criando?</h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {CONTENT_TYPES.map((t) => (
-                <OptionCard key={t.id} selected={contentType === t.id} title={t.label} description={t.description} onClick={() => setContentType(t.id)} />
+                <OptionCard key={t.id} selected={contentType === t.id} title={t.label} description={t.description} onClick={() => pickType(t.id)} />
               ))}
             </div>
           </section>
@@ -50,6 +70,7 @@ export default function NewVideoPage() {
         {info && contentType && (
           <section>
             <h2 className="mb-1 text-xl font-semibold text-gm-purple">Escolha um estilo de edição</h2>
+            <p className="text-sm text-gm-muted">Já deixamos um sugerido para esse tipo de vídeo. Você pode trocar.</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {STYLE_PRESETS.map((s) => (
                 <OptionCard key={s.id} selected={style === s.id} title={s.label} description={s.description} onClick={() => setStyle(s.id)} />
@@ -58,9 +79,21 @@ export default function NewVideoPage() {
           </section>
         )}
 
-        <div className="flex items-center justify-end gap-3">
-          <p className="text-xs text-gm-muted">Fase 1: o vídeo ainda não é enviado; o editor abre com dados de demonstração.</p>
-          <Button disabled={!ready} onClick={start}>Continuar para o editor</Button>
+        {error && <p role="alert" className="rounded-gm bg-rose-50 p-4 text-sm text-rose-700">{error}</p>}
+
+        {uploadPct !== null && (
+          <div aria-live="polite">
+            <div className="h-2 overflow-hidden rounded-full bg-gm-lilac-soft">
+              <div className="h-full bg-gm-purple transition-all" style={{ width: `${uploadPct}%` }} />
+            </div>
+            <p className="mt-2 text-sm text-gm-muted">
+              {uploadPct < 100 ? `Enviando vídeo… ${Math.round(uploadPct)}%` : "Preparando a edição automática…"}
+            </p>
+          </div>
+        )}
+
+        <div className="flex items-center justify-end">
+          <Button disabled={!ready} onClick={start}>Editar automaticamente</Button>
         </div>
       </main>
     </>
