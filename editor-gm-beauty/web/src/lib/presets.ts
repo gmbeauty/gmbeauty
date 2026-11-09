@@ -1,16 +1,69 @@
-import type { StylePresetId } from "./types";
+import type { ContentTypeId, RenderSettings, StylePresetId } from "./types";
 
 export interface StylePreset {
   id: StylePresetId;
   label: string;
   description: string;
+  settings: Partial<RenderSettings>; // o que o estilo define; a logo não é alterada
 }
 
-// Fase 1: só nome e descrição. As regras reais (cortes, zoom, legenda)
-// entram na Fase 7.
+// Cada estilo é só um conjunto de configurações. Para ajustar um estilo,
+// edite aqui; para criar outro, acrescente um item (e o id em types.ts).
 export const STYLE_PRESETS: StylePreset[] = [
-  { id: "gm-clean", label: "GM Clean", description: "Elegante, poucos efeitos, zooms sutis. Ideal para skincare e lançamentos." },
-  { id: "gm-viral", label: "GM Viral", description: "Dinâmico, cortes rápidos e palavras em destaque. Boa retenção." },
-  { id: "gm-produto", label: "GM Produto", description: "O produto é o protagonista; legenda posicionada com cuidado." },
-  { id: "gm-oferta", label: "GM Oferta", description: "Destaca preço, desconto, urgência e CTA final." },
+  {
+    id: "gm-clean",
+    label: "GM Clean",
+    description: "Elegante, poucos efeitos, só pausas longas cortadas. Ideal para skincare e lançamentos.",
+    settings: {
+      captionMode: "traditional", fontSize: "md", position: "bottom", textColor: "white",
+      highlightColor: "lilac", highlightStrategy: "none", removeSilences: true, silenceMinSec: 0.8, zoomMode: "subtle", sfxEnabled: false, brollEnabled: false,
+    },
+  },
+  {
+    id: "gm-viral",
+    label: "GM Viral",
+    description: "Dinâmico: palavra a palavra, destaque nas palavras fortes e ritmo mais rápido.",
+    settings: {
+      captionMode: "word-by-word", fontSize: "lg", position: "bottom", textColor: "white",
+      highlightColor: "lilac", highlightStrategy: "keywords", removeSilences: true, silenceMinSec: 0.5, zoomMode: "dynamic", sfxEnabled: true, brollEnabled: false,
+    },
+  },
+  {
+    id: "gm-produto",
+    label: "GM Produto",
+    description: "O produto é o protagonista: legenda menor, na base da zona segura, com destaque nos termos-chave.",
+    settings: {
+      captionMode: "highlight", fontSize: "sm", position: "bottom", textColor: "white",
+      highlightColor: "lilac", highlightStrategy: "keywords", removeSilences: true, silenceMinSec: 0.8, zoomMode: "off", sfxEnabled: false, brollEnabled: true, // produto sempre inteiro e parado; B-roll mostra o produto de perto
+    },
+  },
+  {
+    id: "gm-oferta",
+    label: "GM Oferta",
+    description: "Destaca preço, desconto, promoção e urgência que aparecerem na fala.",
+    settings: {
+      captionMode: "highlight", fontSize: "lg", position: "bottom", textColor: "white",
+      highlightColor: "lilac", highlightStrategy: "offer", removeSilences: true, silenceMinSec: 0.6, zoomMode: "subtle", sfxEnabled: true, brollEnabled: false,
+    },
+  },
 ];
+
+export const DEFAULT_SETTINGS: RenderSettings = {
+  captionMode: "traditional", fontSize: "md", position: "bottom", textColor: "white",
+  highlightColor: "lilac", highlightStrategy: "none", removeSilences: false, silenceMinSec: 0.6, trimStartSec: 0, zoomMode: "off", sfxEnabled: false, sfxGainDb: -14, brollEnabled: false,
+  logoPosition: "none", logoSizePct: 22, logoOpacity: 0.9,
+};
+
+export function settingsForPreset(id: StylePresetId, base: RenderSettings = DEFAULT_SETTINGS): RenderSettings {
+  const preset = STYLE_PRESETS.find((p) => p.id === id);
+  return { ...base, ...(preset?.settings ?? {}) };
+}
+
+// Sugestão inicial de estilo por tipo de vídeo (a pessoa pode trocar).
+export const SUGGESTED_STYLE: Record<ContentTypeId, StylePresetId> = {
+  ugc: "gm-viral",
+  produto: "gm-produto",
+  tutorial: "gm-clean",
+  oferta: "gm-oferta",
+  "falando-camera": "gm-clean",
+};
